@@ -12,16 +12,21 @@ public enum RawEvidenceSourceKind : ushort
     Sample = 6,
 }
 
+public readonly record struct RawEvidenceSourceLocator(
+    FixedBytes16 SourceId,
+    ulong SourceOffset,
+    uint SourceLength);
+
 public sealed record RawEvidenceInput(
     RawEvidenceSourceKind SourceKind,
     ReadOnlyMemory<byte> Payload,
-    DateTimeOffset ObservedUtc);
+    DateTimeOffset ObservedUtc,
+    RawEvidenceSourceLocator? SourceLocator = null);
 
 public sealed record RawEvidenceReceipt(
     EvidenceReference Reference,
     RawEvidenceSourceKind SourceKind,
-    FixedBytes32 EvidenceDigest,
-    DateTimeOffset ObservedUtc,
+    FixedBytes32 EvidenceDigest, DateTimeOffset ObservedUtc,
     DateTimeOffset CommitUtc,
     bool IsDurable);
 
@@ -31,7 +36,8 @@ public sealed record RecoveredRawEvidence(
     byte[] Payload,
     DateTimeOffset ObservedUtc,
     FixedBytes32 PreviousDigest,
-    FixedBytes32 EvidenceDigest);
+    FixedBytes32 EvidenceDigest,
+    RawEvidenceSourceLocator? SourceLocator = null);
 
 public sealed class EvidenceCorruptionException : IOException
 {

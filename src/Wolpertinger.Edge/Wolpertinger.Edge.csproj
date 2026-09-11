@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageReference Include="System.Formats.Cbor" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Wolpertinger.Presentation.Contracts\Wolpertinger.Presentation.Contracts.csproj" />
