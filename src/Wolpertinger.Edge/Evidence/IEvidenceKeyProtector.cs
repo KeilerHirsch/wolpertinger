@@ -26,4 +26,5 @@ public sealed class EvidenceKeyMaterial : IEquatable<EvidenceKeyMaterial>
         => other is not null && KeyId == other.KeyId && _keyBytes.AsSpan().SequenceEqual(other._keyBytes);
     public override bool Equals(object? obj) => Equals(obj as EvidenceKeyMaterial);
     public override int GetHashCode() => KeyId.GetHashCode();
+    internal void Clear() => System.Security.Cryptography.CryptographicOperations.ZeroMemory(_keyBytes);
 }

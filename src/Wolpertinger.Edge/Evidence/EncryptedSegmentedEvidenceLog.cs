@@ -175,6 +175,7 @@ public sealed class EncryptedSegmentedEvidenceLog : IAsyncDisposable
         }
         finally
         {
+            _key.Clear();
             _gate.Release();
             _gate.Dispose();
         }
