@@ -22,6 +22,8 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
     private readonly Task _presentationTask;
     private readonly SemaphoreSlim _ingestGate = new(1, 1);
     private readonly GameContextTracker _gameContext;
+    private readonly SmartPresentationPolicy _presentationPolicy = new();
+    private readonly PresentationStatePublisher _presentationPublisher;
     private readonly IReadOnlyList<RecoveredRawEvidence> _recoveredEvidence;
     private bool _disposed;
 
@@ -34,6 +36,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         CancellationTokenSource presentationCancellation,
         Task presentationTask,
         GameContextTracker gameContext,
+        PresentationStatePublisher presentationPublisher,
         IReadOnlyList<RecoveredRawEvidence> recoveredEvidence)
     {
         _evidence = evidence;
@@ -44,6 +47,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         _presentationCancellation = presentationCancellation;
         _presentationTask = presentationTask;
         _gameContext = gameContext;
+        _presentationPublisher = presentationPublisher;
         _recoveredEvidence = recoveredEvidence;
         _dispatcher.TrustedJumpApplied += OnTrustedJumpApplied;
     }
@@ -53,6 +57,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
     public KernelSupervisorDiagnostics KernelDiagnostics => _dispatcher.KernelDiagnostics;
     public Wolpertinger.Edge.Contracts.FixedBytes32? FinalStateDigest => _dispatcher.FinalStateDigest;
     public GameContext CurrentGameContext => _gameContext.Current;
+    internal PresentationSnapshot CurrentPresentation => _presentationPublisher.Current;
     public event Action<GameContextTransition>? GameContextChanged;
 
     public static Task<ProductEdgeRuntime> OpenAsync(
@@ -125,6 +130,9 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
             var pipeServer = new PresentationPipeServer(publisher, presentationPipeName);
             var presentationTask = pipeServer.RunAsync(presentationCancellation.Token);
             var gameContext = new GameContextTracker();
+            await publisher.PublishRuntimeHealthAsync(
+                new RuntimeHealthPresentation(ProductRuntimeHealth.Ready, "Ready"),
+                cancellationToken).ConfigureAwait(false);
             return new ProductEdgeRuntime(
                 evidence,
                 ledger,
@@ -134,6 +142,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
                 presentationCancellation,
                 presentationTask,
                 gameContext,
+                publisher,
                 recoveredEvidence);
         }
         catch
@@ -226,9 +235,37 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
     {
         var previous = _gameContext.Current;
         var transition = apply();
-        if (transition.Context == previous) return;
-        RaiseContextChanged(transition);
+        var changed = transition.Context != previous;
+        if (changed || transition.Origin == GameContextSignalOrigin.StatusSnapshot)
+            PublishPresentationContext(transition);
+        if (changed)
+            RaiseContextChanged(transition);
     }
+
+    private void PublishPresentationContext(GameContextTransition transition)
+    {
+        var intent = _presentationPolicy.Decide(transition);
+        _presentationPublisher.PublishContextAsync(Map(transition.Context), intent)
+            .GetAwaiter().GetResult();
+    }
+
+
+    private static PresentationGameContext Map(GameContext context) => context switch
+    {
+        GameContext.InactiveOrNoGame => PresentationGameContext.InactiveOrNoGame,
+        GameContext.MainMenu => PresentationGameContext.MainMenu,
+        GameContext.Docked => PresentationGameContext.Docked,
+        GameContext.StationServices => PresentationGameContext.StationServices,
+        GameContext.Flight => PresentationGameContext.Flight,
+        GameContext.Supercruise => PresentationGameContext.Supercruise,
+        GameContext.GalaxyMap => PresentationGameContext.GalaxyMap,
+        GameContext.SystemMap => PresentationGameContext.SystemMap,
+        GameContext.JumpPreparation => PresentationGameContext.JumpPreparation,
+        GameContext.FsdJump => PresentationGameContext.FsdJump,
+        GameContext.PostJump => PresentationGameContext.PostJump,
+        GameContext.Unknown => PresentationGameContext.Unknown,
+        _ => throw new InvalidDataException($"Undefined game context: {context}."),
+    };
 
     private void RaiseContextChanged(GameContextTransition transition)
     {
@@ -255,6 +292,9 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
             _ingestGate.Release();
         }
 
+        await _presentationPublisher.PublishRuntimeHealthAsync(
+            new RuntimeHealthPresentation(ProductRuntimeHealth.Stopped, "Stopped"))
+            .ConfigureAwait(false);
         _presentationCancellation.Cancel();
         try
         {

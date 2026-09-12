@@ -7,16 +7,16 @@ public sealed class PresentationSnapshotTests
     [Fact]
     public void ProtocolBindingsAreFrozen()
     {
-        Assert.Equal(1, PresentationProtocol.Version);
+        Assert.Equal(2, PresentationProtocol.Version);
         Assert.Equal(65_536, PresentationProtocol.MaximumFrameBytes);
-        Assert.Equal("wolpertinger.presentation.v1", PresentationProtocol.DefaultPipeName);
+        Assert.Equal("wolpertinger.presentation.v2", PresentationProtocol.DefaultPipeName);
         Assert.Equal(typeof(byte), Enum.GetUnderlyingType(typeof(PresentationRealm)));
         Assert.Equal(typeof(byte), Enum.GetUnderlyingType(typeof(PresentationProvenance)));
         Assert.Equal(typeof(byte), Enum.GetUnderlyingType(typeof(PresentationFreshness)));
         Assert.Equal(new[] { "Unknown", "Live", "Legacy", "BetaOrPts" }, Enum.GetNames<PresentationRealm>());
         Assert.Equal(new byte[] { 0, 1, 2, 3 }, Enum.GetValues<PresentationRealm>().Select(value => (byte)value));
-        Assert.Equal(new[] { "Unknown", "LocalJournal", "LocalStatus", "FrontierApi", "Community", "UserEntered" }, Enum.GetNames<PresentationProvenance>());
-        Assert.Equal(new byte[] { 0, 1, 2, 3, 4, 5 }, Enum.GetValues<PresentationProvenance>().Select(value => (byte)value));
+        Assert.Equal(new[] { "Unknown", "LocalJournal", "LocalStatus", "FrontierApi", "Community", "UserEntered", "Sample" }, Enum.GetNames<PresentationProvenance>());
+        Assert.Equal(new byte[] { 0, 1, 2, 3, 4, 5, 6 }, Enum.GetValues<PresentationProvenance>().Select(value => (byte)value));
         Assert.Equal(new[] { "Unknown", "Current", "Stale", "Conflicting" }, Enum.GetNames<PresentationFreshness>());
         Assert.Equal(new byte[] { 0, 1, 2, 3 }, Enum.GetValues<PresentationFreshness>().Select(value => (byte)value));
     }
@@ -24,7 +24,7 @@ public sealed class PresentationSnapshotTests
     [Fact]
     public void InitialSnapshotIsEmptyAtRevisionZero()
     {
-        Assert.Equal(1, PresentationSnapshot.Empty.ProtocolVersion);
+        Assert.Equal(2, PresentationSnapshot.Empty.ProtocolVersion);
         Assert.Equal(0UL, PresentationSnapshot.Empty.Revision);
         Assert.Null(PresentationSnapshot.Empty.Jump);
         PresentationSnapshotValidator.Validate(PresentationSnapshot.Empty);
@@ -39,7 +39,8 @@ public sealed class PresentationSnapshotTests
     [Theory]
     [InlineData(-1)]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(1)]
+    [InlineData(3)]
     public void UnsupportedProtocolFailsClosed(int version)
     {
         Assert.Throws<InvalidDataException>(() =>
@@ -63,8 +64,8 @@ public sealed class PresentationSnapshotTests
     public static IEnumerable<object[]> InvalidDigests()
     {
         foreach (var field in new[] { "Evidence", "State" })
-        foreach (var value in new string?[] { null, "", " ", new('a', 63), new('a', 65), new('g', 64), new('é', 64) })
-            yield return new object[] { field, value! };
+            foreach (var value in new string?[] { null, "", " ", new('a', 63), new('a', 65), new('g', 64), new('é', 64) })
+                yield return new object[] { field, value! };
     }
 
     [Theory]
@@ -80,8 +81,8 @@ public sealed class PresentationSnapshotTests
     public static IEnumerable<object[]> BlankFields()
     {
         foreach (var field in new[] { "Fid", "StarSystem", "ReasonCode", "PositionX", "PositionY", "PositionZ", "JumpDistance", "FuelUsed", "FuelLevel" })
-        foreach (var value in new string?[] { null, "", " \t\r\n" })
-            yield return new object[] { field, value! };
+            foreach (var value in new string?[] { null, "", " \t\r\n" })
+                yield return new object[] { field, value! };
     }
 
     [Theory]
@@ -156,10 +157,17 @@ public sealed class PresentationSnapshotTests
 
 internal static class TestSnapshots
 {
-    public static PresentationSnapshot Jump(ulong revision) => new(1, revision,
+    public static PresentationSnapshot Jump(ulong revision) => new(
+        PresentationProtocol.Version,
+        revision,
+        PresentationGameContext.PostJump,
+        new PresentationIntent(PresentationComposition.PostJump, true, "ContextPostJump", PresentationSelectionMode.Auto),
         new JumpPresentation(new(1, 0), new("F123", PresentationRealm.Live, 0),
             new(1, 0, 0, 128), new string('a', 64), new string('B', 64),
             42, "Sol", "0", "-1.5", "2", "3.5", "1", "12",
             PresentationProvenance.LocalJournal, PresentationFreshness.Current,
-            PresentationProvenance.LocalStatus, PresentationFreshness.Current, "Accepted"));
+            PresentationProvenance.LocalStatus, PresentationFreshness.Current, "Accepted"),
+        null,
+        new RuntimeHealthPresentation(ProductRuntimeHealth.Ready, "Ready"),
+        new FrontierAccountPresentation(FrontierAccountState.Disconnected, PresentationFreshness.Unknown, null, "NotConnected"));
 }

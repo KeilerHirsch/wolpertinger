@@ -7,6 +7,7 @@ using Wolpertinger.Edge.Kernel;
 using Wolpertinger.Edge.Persistence;
 using Wolpertinger.Edge.Runtime;
 using Wolpertinger.Edge.Telemetry;
+using Wolpertinger.Presentation.Contracts;
 
 namespace Wolpertinger.Edge.Tests.Runtime;
 
@@ -75,6 +76,38 @@ public sealed class ProductEdgeRuntimeTests
         var store = new EvidenceKeyStore(paths.EvidenceKeyPath, protector);
         var recovered = await EvidenceLogRecovery.RecoverAsync(paths.EvidenceDirectory, store);
         Assert.Equal(RawEvidenceSourceKind.LocalStatus, Assert.Single(recovered).SourceKind);
+    }
+
+    [Fact]
+    public async Task RuntimeHealthAndSmartContextShareOnePresentationSnapshot()
+    {
+        using var temp = new TempDirectory();
+        var paths = ProductRuntimePaths.ForLive(temp.Path);
+        var runtime = await ProductEdgeRuntime.OpenForTestsAsync(
+            paths, new TestProtector(),
+            static (_, epochs) => new KernelSupervisor(
+                new NoApplyKernelClient(), new NoApplyKernelClient(), epochs),
+            $"wolpertinger.presentation-v2.{Guid.NewGuid():N}");
+
+        Assert.Equal(ProductRuntimeHealth.Ready, runtime.CurrentPresentation.RuntimeHealth.Health);
+        var payload = "{\"timestamp\":\"2026-09-12T10:00:00Z\",\"event\":\"Fileheader\"}"u8.ToArray();
+        var locator = new RawEvidenceSourceLocator(
+            FixedBytes16.FromHex("00112233445566778899AABBCCDDEEFF"), 0, checked((uint)payload.Length + 1));
+        await runtime.ProcessJournalRecordAsync(new JournalSourceRecord(payload, locator));
+        Assert.Equal(PresentationGameContext.MainMenu, runtime.CurrentPresentation.Context);
+        Assert.Equal(PresentationComposition.Quiet, runtime.CurrentPresentation.Intent.Composition);
+
+        var status = "{\"Flags\":16,\"GuiFocus\":0}"u8.ToArray();
+        await runtime.ProcessStatusSnapshotAsync(status);
+        Assert.Equal(PresentationGameContext.Supercruise, runtime.CurrentPresentation.Context);
+        Assert.Equal(PresentationComposition.Quiet, runtime.CurrentPresentation.Intent.Composition);
+        await runtime.ProcessStatusSnapshotAsync(status);
+        Assert.Equal(PresentationComposition.Flight, runtime.CurrentPresentation.Intent.Composition);
+        Assert.Equal(PresentationSelectionMode.Auto, runtime.CurrentPresentation.Intent.SelectionMode);
+
+        await runtime.DisposeAsync();
+        Assert.Equal(ProductRuntimeHealth.Stopped, runtime.CurrentPresentation.RuntimeHealth.Health);
+        Assert.Equal(PresentationGameContext.Supercruise, runtime.CurrentPresentation.Context);
     }
 
     private sealed class TestProtector : IEvidenceKeyProtector

@@ -138,6 +138,8 @@ public sealed class PresentationViewModelFactoryTests
         return new PresentationSnapshot(
             PresentationProtocol.Version,
             revision,
+            PresentationGameContext.PostJump,
+            new PresentationIntent(PresentationComposition.PostJump, true, "ContextPostJump", PresentationSelectionMode.Auto),
             new JumpPresentation(
                 new PresentationCursor(123, 2),
                 new PresentationProfile("F123456", PresentationRealm.Live, 7),
@@ -156,6 +158,9 @@ public sealed class PresentationViewModelFactoryTests
                 locationFreshness,
                 PresentationProvenance.LocalStatus,
                 fuelFreshness,
-                "JumpCompleted"));
+                "JumpCompleted"),
+            null,
+            new RuntimeHealthPresentation(ProductRuntimeHealth.Ready, "Ready"),
+            new FrontierAccountPresentation(FrontierAccountState.Disconnected, PresentationFreshness.Unknown, null, "NotConnected"));
     }
 }

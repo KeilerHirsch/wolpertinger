@@ -10,7 +10,7 @@ public sealed class PresentationFrameCodecTests
     [Fact]
     public async Task AcceptsExactMaximumFrameAndReadsOnlyOneFrame()
     {
-        const string json = "{\"protocolVersion\":1,\"revision\":0,\"jump\":null}";
+        const string json = "{\"protocolVersion\":2,\"revision\":0,\"context\":\"InactiveOrNoGame\",\"intent\":{\"composition\":\"Quiet\",\"overlayEmphasized\":false,\"reasonCode\":\"Startup\",\"selectionMode\":\"Auto\"},\"jump\":null,\"commanderVessel\":null,\"runtimeHealth\":{\"health\":\"Starting\",\"reasonCode\":\"Startup\"},\"frontierAccount\":{\"state\":\"Disconnected\",\"freshness\":\"Unknown\",\"lastSuccessUnixMs\":null,\"reasonCode\":\"NotConnected\"}}";
         var payload = Encoding.UTF8.GetBytes(json.PadRight(PresentationProtocol.MaximumFrameBytes));
         await using var stream = new MemoryStream();
         var prefix = new byte[4];
@@ -34,7 +34,7 @@ public sealed class PresentationFrameCodecTests
         var bytes = stream.ToArray();
         Assert.Equal(bytes.Length - 4, BinaryPrimitives.ReadInt32BigEndian(bytes));
         var json = Encoding.UTF8.GetString(bytes, 4, bytes.Length - 4);
-        Assert.Contains("\"protocolVersion\":1", json);
+        Assert.Contains("\"protocolVersion\":2", json);
         if (!empty) Assert.Contains("\"LocalJournal\"", json);
         stream.Position = 0;
         Assert.Equal(snapshot, await PresentationFrameCodec.ReadAsync(stream));
