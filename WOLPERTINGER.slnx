@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Wolpertinger.AppHost/Wolpertinger.AppHost.csproj" />
+    <Project Path="src/Wolpertinger.Product.Contracts/Wolpertinger.Product.Contracts.csproj" />
     <Project Path="src/Wolpertinger.Presentation.App/Wolpertinger.Presentation.App.csproj" />
     <Project Path="src/Wolpertinger.Presentation/Wolpertinger.Presentation.csproj" />
     <Project Path="src/Wolpertinger.Presentation.Windows/Wolpertinger.Presentation.Windows.csproj" />
@@ -8,6 +10,7 @@
     <Project Path="src/Wolpertinger.Host/Wolpertinger.Host.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Wolpertinger.AppHost.Tests/Wolpertinger.AppHost.Tests.csproj" />
     <Project Path="tests/Wolpertinger.Presentation.Tests/Wolpertinger.Presentation.Tests.csproj" />
     <Project Path="tests/Wolpertinger.Edge.Tests/Wolpertinger.Edge.Tests.csproj" />
     <Project Path="tests/Wolpertinger.Integration.Tests/Wolpertinger.Integration.Tests.csproj" />

@@ -65,14 +65,15 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         string kernelExecutable,
         IEvidenceKeyProtector keyProtector,
         string presentationPipeName = PresentationProtocol.DefaultPipeName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IChildProcessContainment? processContainment = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(kernelExecutable);
         return OpenCoreAsync(
             paths,
             keyProtector,
             (ledger, epochs) => KernelSupervisor.Create(
-                new KernelProcessOptions(kernelExecutable, TimeSpan.FromSeconds(5)),
+                new KernelProcessOptions(kernelExecutable, TimeSpan.FromSeconds(5), processContainment),
                 (AuthorityEpochStore)epochs,
                 ledger),
             presentationPipeName,

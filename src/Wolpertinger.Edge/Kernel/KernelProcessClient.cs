@@ -63,10 +63,25 @@ public sealed class KernelProcessClient : IKernelProcessClient
             process.Dispose();
             throw new InvalidOperationException("Failed to start trusted kernel process.");
         }
-        cancellationToken.ThrowIfCancellationRequested();
-        _process = process;
-        _ = process.StandardError.ReadToEndAsync();
-        await Task.CompletedTask;
+        try
+        {
+            _options.ProcessContainment?.Assign(process);
+            cancellationToken.ThrowIfCancellationRequested();
+            _process = process;
+            _ = process.StandardError.ReadToEndAsync();
+            await Task.CompletedTask;
+        }
+        catch
+        {
+            _process = null;
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+            }
+            process.Dispose();
+            throw;
+        }
     }
 
     public async Task SetRoleAsync(
