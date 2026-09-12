@@ -39,6 +39,7 @@ public sealed class TrustedObservationDispatcher : IAsyncDisposable
     public IReadOnlyList<DiagnosticEvent> Diagnostics => _diagnostics;
     public FixedBytes32? FinalStateDigest => _supervisor.Diagnostics.LastAgreedDigest;
     public KernelSupervisorDiagnostics KernelDiagnostics => _supervisor.Diagnostics;
+    internal event Action? TrustedJumpApplied;
 
     public async Task ProcessJournalEvidenceAsync(
         RawEvidenceReceipt receipt,
@@ -150,6 +151,7 @@ public sealed class TrustedObservationDispatcher : IAsyncDisposable
 
         if (observation.Kind != ObservationKind.FsdJump) return;
         var fact = JumpFactFactory.Create(observation, reference, result);
+        TrustedJumpApplied?.Invoke();
         var decision = _context.Decide(fact);
         if (!decision.Surface) return;
 

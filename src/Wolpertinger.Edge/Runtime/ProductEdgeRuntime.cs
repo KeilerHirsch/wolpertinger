@@ -1,3 +1,4 @@
+using Wolpertinger.Edge.Context;
 using Wolpertinger.Edge.Diagnostics;
 using Wolpertinger.Edge.Evidence;
 using Wolpertinger.Edge.Kernel;
@@ -10,7 +11,7 @@ using Wolpertinger.Presentation.Contracts;
 
 namespace Wolpertinger.Edge.Runtime;
 
-public sealed class ProductEdgeRuntime : IAsyncDisposable
+public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
 {
     private readonly EncryptedSegmentedEvidenceLog _evidence;
     private readonly NormalizedObservationLedger _ledger;
@@ -20,6 +21,8 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
     private readonly CancellationTokenSource _presentationCancellation;
     private readonly Task _presentationTask;
     private readonly SemaphoreSlim _ingestGate = new(1, 1);
+    private readonly GameContextTracker _gameContext;
+    private readonly IReadOnlyList<RecoveredRawEvidence> _recoveredEvidence;
     private bool _disposed;
 
     private ProductEdgeRuntime(
@@ -29,7 +32,9 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
         ProjectionStore projections,
         TrustedObservationDispatcher dispatcher,
         CancellationTokenSource presentationCancellation,
-        Task presentationTask)
+        Task presentationTask,
+        GameContextTracker gameContext,
+        IReadOnlyList<RecoveredRawEvidence> recoveredEvidence)
     {
         _evidence = evidence;
         _ledger = ledger;
@@ -38,12 +43,17 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
         _dispatcher = dispatcher;
         _presentationCancellation = presentationCancellation;
         _presentationTask = presentationTask;
+        _gameContext = gameContext;
+        _recoveredEvidence = recoveredEvidence;
+        _dispatcher.TrustedJumpApplied += OnTrustedJumpApplied;
     }
 
     public IReadOnlyList<CopilotOutput> Outputs => _dispatcher.Outputs;
     public IReadOnlyList<DiagnosticEvent> Diagnostics => _dispatcher.Diagnostics;
     public KernelSupervisorDiagnostics KernelDiagnostics => _dispatcher.KernelDiagnostics;
     public Wolpertinger.Edge.Contracts.FixedBytes32? FinalStateDigest => _dispatcher.FinalStateDigest;
+    public GameContext CurrentGameContext => _gameContext.Current;
+    public event Action<GameContextTransition>? GameContextChanged;
 
     public static Task<ProductEdgeRuntime> OpenAsync(
         ProductRuntimePaths paths,
@@ -90,6 +100,8 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(presentationPipeName);
 
         var keyStore = new EvidenceKeyStore(paths.EvidenceKeyPath, keyProtector);
+        var recoveredEvidence = await EvidenceLogRecovery.RecoverAsync(
+            paths.EvidenceDirectory, keyStore, cancellationToken).ConfigureAwait(false);
         var evidence = await EncryptedSegmentedEvidenceLog.OpenAsync(
             paths.EvidenceDirectory, keyStore, cancellationToken: cancellationToken).ConfigureAwait(false);
         var ledger = await NormalizedObservationLedger.OpenAsync(
@@ -112,6 +124,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
             presentationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var pipeServer = new PresentationPipeServer(publisher, presentationPipeName);
             var presentationTask = pipeServer.RunAsync(presentationCancellation.Token);
+            var gameContext = new GameContextTracker();
             return new ProductEdgeRuntime(
                 evidence,
                 ledger,
@@ -119,7 +132,9 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
                 projections,
                 dispatcher,
                 presentationCancellation,
-                presentationTask);
+                presentationTask,
+                gameContext,
+                recoveredEvidence);
         }
         catch
         {
@@ -166,10 +181,63 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
                 cancellationToken).ConfigureAwait(false);
             await _dispatcher.ProcessJournalEvidenceAsync(
                 receipt, record.Payload, cancellationToken).ConfigureAwait(false);
+            ApplyContext(() => _gameContext.ApplyJournal(record.Payload));
         }
         finally
         {
             _ingestGate.Release();
+        }
+    }
+
+    public async Task ProcessStatusSnapshotAsync(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default)
+    {
+        if (payload.IsEmpty)
+            throw new ArgumentException("Status snapshot payload is empty.", nameof(payload));
+
+        await _ingestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            await _evidence.AppendAsync(
+                new RawEvidenceInput(
+                    RawEvidenceSourceKind.LocalStatus,
+                    payload,
+                    DateTimeOffset.UtcNow),
+                cancellationToken).ConfigureAwait(false);
+            ApplyContext(() => _gameContext.ApplyStatus(payload));
+        }
+        finally
+        {
+            _ingestGate.Release();
+        }
+    }
+
+    public EliteTelemetryWatcher CreateTelemetryWatcher(
+        string eliteDataDirectory,
+        AtomicSnapshotReader? snapshotReader = null)
+        => new(eliteDataDirectory, this, _recoveredEvidence, snapshotReader);
+
+    private void OnTrustedJumpApplied()
+        => ApplyContext(_gameContext.ApplyTrustedFsdJump);
+
+    private void ApplyContext(Func<GameContextTransition> apply)
+    {
+        var previous = _gameContext.Current;
+        var transition = apply();
+        if (transition.Context == previous) return;
+        RaiseContextChanged(transition);
+    }
+
+    private void RaiseContextChanged(GameContextTransition transition)
+    {
+        var handlers = GameContextChanged;
+        if (handlers is null) return;
+        foreach (Action<GameContextTransition> handler in handlers.GetInvocationList())
+        {
+            try { handler(transition); }
+            catch { /* Presentation observers cannot break authoritative ingest. */ }
         }
     }
 
@@ -196,6 +264,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable
         {
         }
 
+        _dispatcher.TrustedJumpApplied -= OnTrustedJumpApplied;
         await _dispatcher.DisposeAsync().ConfigureAwait(false);
         await _projections.DisposeAsync().ConfigureAwait(false);
         await _supervisor.DisposeAsync().ConfigureAwait(false);

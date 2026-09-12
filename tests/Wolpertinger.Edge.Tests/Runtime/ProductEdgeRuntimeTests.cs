@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using Wolpertinger.Edge.Context;
 using Wolpertinger.Edge.Contracts;
 using Wolpertinger.Edge.Evidence;
 using Wolpertinger.Edge.Kernel;
@@ -47,6 +48,33 @@ public sealed class ProductEdgeRuntimeTests
         var record = Assert.Single(recovered);
         Assert.Equal(RawEvidenceSourceKind.LocalJournal, record.SourceKind);
         Assert.Equal(locator, record.SourceLocator);
+    }
+
+    [Fact]
+    public async Task StatusIsDurableBeforeContextTransition()
+    {
+        using var temp = new TempDirectory();
+        var paths = ProductRuntimePaths.ForLive(temp.Path);
+        var protector = new TestProtector();
+        var transitions = new List<GameContextTransition>();
+        await using (var runtime = await ProductEdgeRuntime.OpenForTestsAsync(
+                         paths, protector,
+                         static (_, epochs) => new KernelSupervisor(
+                             new NoApplyKernelClient(), new NoApplyKernelClient(), epochs),
+                         $"wolpertinger.status.{Guid.NewGuid():N}"))
+        {
+            runtime.GameContextChanged += transitions.Add;
+            await runtime.ProcessStatusSnapshotAsync(
+                "{\"Flags\":16,\"GuiFocus\":0}"u8.ToArray());
+            Assert.Equal(GameContext.Supercruise, runtime.CurrentGameContext);
+            Assert.Equal(new GameContextTransition(
+                GameContext.Supercruise, GameContextSignalOrigin.StatusSnapshot),
+                Assert.Single(transitions));
+        }
+
+        var store = new EvidenceKeyStore(paths.EvidenceKeyPath, protector);
+        var recovered = await EvidenceLogRecovery.RecoverAsync(paths.EvidenceDirectory, store);
+        Assert.Equal(RawEvidenceSourceKind.LocalStatus, Assert.Single(recovered).SourceKind);
     }
 
     private sealed class TestProtector : IEvidenceKeyProtector

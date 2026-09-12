@@ -1,4 +1,5 @@
 using System.Text;
+using Wolpertinger.Edge.Context;
 using Wolpertinger.Edge.Contracts;
 using Wolpertinger.Edge.Evidence;
 using Wolpertinger.Edge.Kernel;
@@ -53,11 +54,16 @@ public sealed class FsdJumpVerticalSliceTests
         ObservationCursor firstCursor;
         await using (var runtime = await ProductEdgeRuntime.OpenAsync(paths, kernel, protector, pipeName))
         {
+            var transitions = new List<GameContextTransition>();
+            runtime.GameContextChanged += transitions.Add;
             foreach (var record in records) await runtime.ProcessJournalRecordAsync(record);
             Assert.Single(runtime.Outputs);
             firstDigest = runtime.FinalStateDigest!.Value;
             firstCursor = runtime.KernelDiagnostics.LastAgreedCursor!.Value;
             Assert.Equal(2UL, firstCursor.EvidenceSequence);
+            Assert.Equal(GameContext.PostJump, runtime.CurrentGameContext);
+            Assert.Contains(transitions, t => t == new GameContextTransition(
+                GameContext.PostJump, GameContextSignalOrigin.Trusted));
         }
 
         await using (var reopened = await ProductEdgeRuntime.OpenAsync(paths, kernel, protector, pipeName))
