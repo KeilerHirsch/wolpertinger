@@ -2,6 +2,7 @@ using Wolpertinger.Edge.Context;
 using Wolpertinger.Edge.Diagnostics;
 using Wolpertinger.Edge.Evidence;
 using Wolpertinger.Edge.Kernel;
+using Wolpertinger.Edge.Frontier;
 using Wolpertinger.Edge.Output;
 using Wolpertinger.Edge.Persistence;
 using Wolpertinger.Edge.Presentation;
@@ -25,6 +26,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
     private readonly SmartPresentationPolicy _presentationPolicy = new();
     private readonly PresentationStatePublisher _presentationPublisher;
     private readonly IReadOnlyList<RecoveredRawEvidence> _recoveredEvidence;
+    private IFrontierAccountStateSource? _frontierAccountStateSource;
     private bool _disposed;
 
     private ProductEdgeRuntime(
@@ -229,6 +231,22 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         AtomicSnapshotReader? snapshotReader = null)
         => new(eliteDataDirectory, this, _recoveredEvidence, snapshotReader);
 
+    public void AttachFrontierAccountService(IFrontierAccountStateSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_frontierAccountStateSource is not null)
+            _frontierAccountStateSource.StatusChanged -= OnFrontierAccountStatusChanged;
+        _frontierAccountStateSource = source;
+        source.StatusChanged += OnFrontierAccountStatusChanged;
+        OnFrontierAccountStatusChanged(source.Current);
+    }
+
+    private void OnFrontierAccountStatusChanged(FrontierAccountStatus status)
+        => _presentationPublisher.PublishFrontierAccountAsync(
+            new FrontierAccountPresentation(status.State, status.Freshness,
+                status.LastSuccessUnixMs, status.ReasonCode)).GetAwaiter().GetResult();
+
     private void OnTrustedJumpApplied()
         => ApplyContext(_gameContext.ApplyTrustedFsdJump);
 
@@ -293,6 +311,11 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
             _ingestGate.Release();
         }
 
+        if (_frontierAccountStateSource is not null)
+        {
+            _frontierAccountStateSource.StatusChanged -= OnFrontierAccountStatusChanged;
+            _frontierAccountStateSource = null;
+        }
         await _presentationPublisher.PublishRuntimeHealthAsync(
             new RuntimeHealthPresentation(ProductRuntimeHealth.Stopped, "Stopped"))
             .ConfigureAwait(false);

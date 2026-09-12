@@ -3,6 +3,7 @@ using System.Text;
 using Wolpertinger.Edge.Context;
 using Wolpertinger.Edge.Contracts;
 using Wolpertinger.Edge.Evidence;
+using Wolpertinger.Edge.Frontier;
 using Wolpertinger.Edge.Kernel;
 using Wolpertinger.Edge.Persistence;
 using Wolpertinger.Edge.Runtime;
@@ -108,6 +109,41 @@ public sealed class ProductEdgeRuntimeTests
         await runtime.DisposeAsync();
         Assert.Equal(ProductRuntimeHealth.Stopped, runtime.CurrentPresentation.RuntimeHealth.Health);
         Assert.Equal(PresentationGameContext.Supercruise, runtime.CurrentPresentation.Context);
+    }
+
+    [Fact]
+    public async Task FrontierAccountStatusFlowsThroughSinglePresentationPublisher()
+    {
+        using var temp = new TempDirectory();
+        var runtime = await ProductEdgeRuntime.OpenForTestsAsync(
+            ProductRuntimePaths.ForLive(temp.Path), new TestProtector(),
+            static (_, epochs) => new KernelSupervisor(
+                new NoApplyKernelClient(), new NoApplyKernelClient(), epochs),
+            $"wolpertinger.frontier.{Guid.NewGuid():N}");
+        var source = new FakeFrontierAccountStateSource();
+        runtime.AttachFrontierAccountService(source);
+
+        source.Publish(new FrontierAccountStatus(
+            FrontierAccountState.Connected, PresentationFreshness.Current, 1234, "ProfileCurrent"));
+
+        Assert.Equal(FrontierAccountState.Connected, runtime.CurrentPresentation.FrontierAccount.State);
+        Assert.Equal(1234, runtime.CurrentPresentation.FrontierAccount.LastSuccessUnixMs);
+        await runtime.DisposeAsync();
+        source.Publish(new FrontierAccountStatus(
+            FrontierAccountState.Unavailable, PresentationFreshness.Stale, 1234, "Late"));
+        Assert.Equal(FrontierAccountState.Connected, runtime.CurrentPresentation.FrontierAccount.State);
+    }
+
+    private sealed class FakeFrontierAccountStateSource : IFrontierAccountStateSource
+    {
+        public FrontierAccountStatus Current { get; private set; } = new(
+            FrontierAccountState.Disconnected, PresentationFreshness.Unknown, null, "Disconnected");
+        public event Action<FrontierAccountStatus>? StatusChanged;
+        public void Publish(FrontierAccountStatus status)
+        {
+            Current = status;
+            StatusChanged?.Invoke(status);
+        }
     }
 
     private sealed class TestProtector : IEvidenceKeyProtector
