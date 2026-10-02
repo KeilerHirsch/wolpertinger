@@ -7,4 +7,9 @@
     <ProjectReference Include="..\Wolpertinger.Edge\Wolpertinger.Edge.csproj" />
     <ProjectReference Include="..\Wolpertinger.Product.Contracts\Wolpertinger.Product.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\fixtures\r0\sample-flow.jsonl"
+             Link="fixtures\r0\sample-flow.jsonl"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

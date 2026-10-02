@@ -70,6 +70,7 @@ public static class JumpPresentationProjector
         SourceProvenance.FrontierApi => PresentationProvenance.FrontierApi,
         SourceProvenance.Community => PresentationProvenance.Community,
         SourceProvenance.UserEntered => PresentationProvenance.UserEntered,
+        SourceProvenance.Sample => PresentationProvenance.Sample,
         _ => throw new InvalidDataException($"Undefined source provenance: {value}."),
     };
 

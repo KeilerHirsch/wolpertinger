@@ -31,6 +31,20 @@ public sealed class PresentationStatePublisher : IPresentationPublisher
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask PublishCommanderVesselAsync(
+        CommanderVesselFact fact,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(fact);
+        Publish(current => current with
+        {
+            Revision = checked(current.Revision + 1),
+            CommanderVessel = CommanderVesselPresentationProjector.Project(fact),
+        });
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask PublishContextAsync(
         PresentationGameContext context,
         PresentationIntent intent,

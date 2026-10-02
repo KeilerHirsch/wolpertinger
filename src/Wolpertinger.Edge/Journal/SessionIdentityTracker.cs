@@ -75,10 +75,7 @@ public sealed class SessionIdentityTracker
         {
             throw new InvalidOperationException("Journal normalization requires durable raw evidence.");
         }
-        if (receipt.SourceKind != RawEvidenceSourceKind.LocalJournal)
-        {
-            throw new InvalidDataException("Journal identity tracking requires LocalJournal evidence.");
-        }
+        _ = JournalEvidenceProvenance.Map(receipt.SourceKind);
 
         return JournalEventClassifier.Classify(root) switch
         {
@@ -206,7 +203,8 @@ public sealed class SessionIdentityTracker
             receipt.CommitUtc.ToUnixTimeMilliseconds(),
             MessageCount: 1,
             SessionBoundPayload.Instance,
-            SourceProvenance.LocalJournal);
+            JournalEvidenceProvenance.Map(receipt.SourceKind),
+            JournalEvidenceProvenance.ProtocolVersion(receipt.SourceKind));
 
     private static FixedBytes16 DeriveSessionId(FixedBytes32 evidenceDigest)
     {

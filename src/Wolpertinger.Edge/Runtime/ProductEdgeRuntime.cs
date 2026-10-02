@@ -7,12 +7,13 @@ using Wolpertinger.Edge.Output;
 using Wolpertinger.Edge.Persistence;
 using Wolpertinger.Edge.Presentation;
 using Wolpertinger.Edge.Projections;
+using Wolpertinger.Edge.Sample;
 using Wolpertinger.Edge.Telemetry;
 using Wolpertinger.Presentation.Contracts;
 
 namespace Wolpertinger.Edge.Runtime;
 
-public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
+public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, ISampleIngestTarget
 {
     private readonly EncryptedSegmentedEvidenceLog _evidence;
     private readonly NormalizedObservationLedger _ledger;
@@ -59,7 +60,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
     public KernelSupervisorDiagnostics KernelDiagnostics => _dispatcher.KernelDiagnostics;
     public Wolpertinger.Edge.Contracts.FixedBytes32? FinalStateDigest => _dispatcher.FinalStateDigest;
     public GameContext CurrentGameContext => _gameContext.Current;
-    internal PresentationSnapshot CurrentPresentation => _presentationPublisher.Current;
+    public PresentationSnapshot CurrentPresentation => _presentationPublisher.Current;
     public event Action<GameContextTransition>? GameContextChanged;
 
     public static Task<ProductEdgeRuntime> OpenAsync(
@@ -166,13 +167,35 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         }
     }
 
-    public async Task ProcessJournalRecordAsync(
+    public Task ProcessJournalRecordAsync(
         JournalSourceRecord record,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        if (record.Payload.Length == 0)
-            throw new ArgumentException("Journal record payload is empty.", nameof(record));
+        return ProcessJournalPayloadAsync(
+            record.Payload,
+            RawEvidenceSourceKind.LocalJournal,
+            record.Locator,
+            cancellationToken);
+    }
+
+    public Task ProcessSampleJournalAsync(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default)
+        => ProcessJournalPayloadAsync(
+            payload,
+            RawEvidenceSourceKind.Sample,
+            sourceLocator: null,
+            cancellationToken);
+
+    private async Task ProcessJournalPayloadAsync(
+        ReadOnlyMemory<byte> payload,
+        RawEvidenceSourceKind sourceKind,
+        RawEvidenceSourceLocator? sourceLocator,
+        CancellationToken cancellationToken)
+    {
+        if (payload.IsEmpty)
+            throw new ArgumentException("Journal record payload is empty.", nameof(payload));
 
         await _ingestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -186,14 +209,14 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
 
             var receipt = await _evidence.AppendAsync(
                 new RawEvidenceInput(
-                    RawEvidenceSourceKind.LocalJournal,
-                    record.Payload,
+                    sourceKind,
+                    payload,
                     DateTimeOffset.UtcNow,
-                    record.Locator),
+                    sourceLocator),
                 cancellationToken).ConfigureAwait(false);
             await _dispatcher.ProcessJournalEvidenceAsync(
-                receipt, record.Payload, cancellationToken).ConfigureAwait(false);
-            ApplyContext(() => _gameContext.ApplyJournal(record.Payload));
+                receipt, payload, cancellationToken).ConfigureAwait(false);
+            ApplyContext(() => _gameContext.ApplyJournal(payload));
         }
         finally
         {
@@ -201,9 +224,26 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
         }
     }
 
-    public async Task ProcessStatusSnapshotAsync(
+    public Task ProcessStatusSnapshotAsync(
         ReadOnlyMemory<byte> payload,
         CancellationToken cancellationToken = default)
+        => ProcessStatusPayloadAsync(
+            payload,
+            RawEvidenceSourceKind.LocalStatus,
+            cancellationToken);
+
+    public Task ProcessSampleStatusAsync(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default)
+        => ProcessStatusPayloadAsync(
+            payload,
+            RawEvidenceSourceKind.Sample,
+            cancellationToken);
+
+    private async Task ProcessStatusPayloadAsync(
+        ReadOnlyMemory<byte> payload,
+        RawEvidenceSourceKind sourceKind,
+        CancellationToken cancellationToken)
     {
         if (payload.IsEmpty)
             throw new ArgumentException("Status snapshot payload is empty.", nameof(payload));
@@ -214,11 +254,43 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink
             ObjectDisposedException.ThrowIf(_disposed, this);
             await _evidence.AppendAsync(
                 new RawEvidenceInput(
-                    RawEvidenceSourceKind.LocalStatus,
+                    sourceKind,
                     payload,
                     DateTimeOffset.UtcNow),
                 cancellationToken).ConfigureAwait(false);
             ApplyContext(() => _gameContext.ApplyStatus(payload));
+        }
+        finally
+        {
+            _ingestGate.Release();
+        }
+    }
+
+    public async Task ProcessSampleCommanderVesselAsync(
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default)
+    {
+        if (payload.IsEmpty)
+            throw new ArgumentException("Commander/Vessel payload is empty.", nameof(payload));
+
+        await _ingestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_supervisor.Lifecycle != KernelSupervisorLifecycle.Synchronized)
+            {
+                throw new InvalidOperationException(
+                    $"Ingest is unavailable while trusted authority is {_supervisor.Lifecycle}; reopen and replay if faulted.");
+            }
+
+            var receipt = await _evidence.AppendAsync(
+                new RawEvidenceInput(
+                    RawEvidenceSourceKind.Sample,
+                    payload,
+                    DateTimeOffset.UtcNow),
+                cancellationToken).ConfigureAwait(false);
+            await _dispatcher.ProcessCommanderVesselEvidenceAsync(
+                receipt, payload, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

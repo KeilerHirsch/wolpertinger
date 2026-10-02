@@ -57,6 +57,20 @@ public sealed class ArchitectureTests
         Assert.Null(containment.DefaultValue);
     }
 
+    [Fact]
+    public void R0SampleFixtureShipsBesideAppHost()
+    {
+        var assemblyDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location)
+            ?? throw new DirectoryNotFoundException("AppHost assembly directory unavailable.");
+        var fixture = Path.Combine(
+            assemblyDirectory,
+            "fixtures",
+            "r0",
+            "sample-flow.jsonl");
+
+        Assert.True(File.Exists(fixture), $"Missing packaged sample fixture: {fixture}");
+    }
+
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -1,33 +1,45 @@
 namespace Wolpertinger.Edge.Runtime;
 
 public sealed record ProductRuntimePaths(
+    ProductRuntimeMode Mode,
     string RootDirectory,
     string EvidenceDirectory,
     string NormalizedLedgerPath,
     string AuthorityEpochPath,
     string ProjectionDatabasePath,
     string EvidenceKeyPath,
-    string FrontierTokenPath,
+    string? FrontierTokenPath,
     string LogsDirectory)
 {
     public static ProductRuntimePaths ForLive(string root)
-        => Create(root, "live");
+        => Create(root, ProductRuntimeMode.Live);
 
     public static ProductRuntimePaths ForSample(string root)
-        => Create(root, "sample");
+        => Create(root, ProductRuntimeMode.Sample);
 
-    private static ProductRuntimePaths Create(string root, string mode)
+    public static ProductRuntimePaths Create(string root, ProductRuntimeMode mode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        var baseRoot = Path.Combine(Path.GetFullPath(root), mode);
+        if (!Enum.IsDefined(mode))
+            throw new ArgumentOutOfRangeException(nameof(mode));
+
+        var productRoot = Path.GetFullPath(root);
+        var runtimeRoot = Path.Combine(
+            productRoot,
+            "runtime",
+            mode == ProductRuntimeMode.Live ? "live" : "sample");
+
         return new ProductRuntimePaths(
-            baseRoot,
-            Path.Combine(baseRoot, "evidence"),
-            Path.Combine(baseRoot, "normalized", "observations.bin"),
-            Path.Combine(baseRoot, "control", "authority-epochs.bin"),
-            Path.Combine(baseRoot, "projections.db"),
-            Path.Combine(baseRoot, "secrets", "evidence-key.bin"),
-            Path.Combine(baseRoot, "secrets", "frontier-token.bin"),
-            Path.Combine(baseRoot, "logs"));
+            mode,
+            runtimeRoot,
+            Path.Combine(runtimeRoot, "evidence"),
+            Path.Combine(runtimeRoot, "normalized", "observations.bin"),
+            Path.Combine(runtimeRoot, "control", "authority-epochs.bin"),
+            Path.Combine(runtimeRoot, "projections.db"),
+            Path.Combine(runtimeRoot, "secrets", "evidence-key.bin"),
+            mode == ProductRuntimeMode.Live
+                ? Path.Combine(productRoot, "secrets", "frontier-token.bin")
+                : null,
+            Path.Combine(runtimeRoot, "logs"));
     }
 }

@@ -2,9 +2,7 @@ using System.Diagnostics;
 using Wolpertinger.AppHost.Activation;
 using Wolpertinger.AppHost.Lifecycle;
 using Wolpertinger.AppHost.Windows;
-using Wolpertinger.Edge.Evidence;
 using Wolpertinger.Edge.Runtime;
-using Wolpertinger.Edge.Telemetry;
 using Wolpertinger.Presentation.Contracts;
 using Wolpertinger.Product.Contracts;
 
@@ -29,9 +27,7 @@ public static class Program
         AppDomain.CurrentDomain.ProcessExit += processExit;
 
         ProcessJob? job = null;
-        ProductEdgeRuntime? runtime = null;
-        EliteTelemetryWatcher? telemetry = null;
-        Task? telemetryTask = null;
+        ProductRuntimeHost? runtimeHost = null;
         Task<PresentationSupervisorResult>? presentationTask = null;
         try
         {
@@ -40,26 +36,21 @@ public static class Program
             var kernelExecutable = RequirePackagedFile(packageRoot, "wolpertinger_kernel.exe");
             var presentationExecutable = RequirePackagedFile(packageRoot, "Wolpertinger.Presentation.App.exe");
 
+            var sampleFixture = RequirePackagedFile(
+                packageRoot,
+                Path.Combine("fixtures", "r0", "sample-flow.jsonl"));
             var userRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "WOLPERTINGER");
             Directory.CreateDirectory(userRoot);
-            var paths = ProductRuntimePaths.ForLive(userRoot);
 
-            runtime = await ProductEdgeRuntime.OpenAsync(
-                paths,
+            runtimeHost = new ProductRuntimeHost(
+                userRoot,
                 kernelExecutable,
-                new DpapiCurrentUserKeyProtector(),
-                PresentationProtocol.DefaultPipeName,
-                productStop.Token,
-                processContainment: job).ConfigureAwait(false);
-
-            var eliteDataPath = new WindowsEliteDataPathResolver().Resolve();
-            if (eliteDataPath is not null)
-            {
-                telemetry = runtime.CreateTelemetryWatcher(eliteDataPath);
-                telemetryTask = telemetry.RunAsync(productStop.Token);
-            }
+                sampleFixture,
+                job,
+                productStop.Token);
+            await runtimeHost.StartAsync(ProductRuntimeMode.Live).ConfigureAwait(false);
 
             var launcher = new PresentationProcessLauncher(
                 presentationExecutable,
@@ -69,7 +60,7 @@ public static class Program
             presentationTask = presentationSupervisor.RunAsync(productStop.Token);
 
             var activation = new ActivationChannel(instance.ActivationPipeName);
-            await RunActivationLoopAsync(activation, productStop).ConfigureAwait(false);
+            await RunActivationLoopAsync(activation, productStop, runtimeHost).ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException) when (productStop.IsCancellationRequested)
@@ -86,16 +77,11 @@ public static class Program
             productStop.Cancel();
             AppDomain.CurrentDomain.ProcessExit -= processExit;
 
-            if (telemetryTask is not null)
-                await ObserveShutdownAsync(telemetryTask, "telemetry").ConfigureAwait(false);
-            if (telemetry is not null)
-                await telemetry.DisposeAsync().ConfigureAwait(false);
+            if (runtimeHost is not null)
+                await runtimeHost.DisposeAsync().ConfigureAwait(false);
 
             if (presentationTask is not null)
                 await ObserveShutdownAsync(presentationTask, "presentation").ConfigureAwait(false);
-
-            if (runtime is not null)
-                await runtime.DisposeAsync().ConfigureAwait(false);
 
             job?.Dispose();
         }
@@ -103,7 +89,8 @@ public static class Program
 
     private static async Task RunActivationLoopAsync(
         ActivationChannel channel,
-        CancellationTokenSource productStop)
+        CancellationTokenSource productStop,
+        ProductRuntimeHost runtimeHost)
     {
         while (!productStop.IsCancellationRequested)
         {
@@ -127,13 +114,25 @@ public static class Program
                 continue;
             }
 
-            if (activation.Kind == ProductActivationKind.Exit)
+            switch (activation.Kind)
             {
-                productStop.Cancel();
-                return;
+                case ProductActivationKind.Exit:
+                    productStop.Cancel();
+                    return;
+                case ProductActivationKind.EnterSample:
+                    await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Sample)
+                        .ConfigureAwait(false);
+                    Trace.TraceInformation("Product runtime switched to isolated Sample mode.");
+                    break;
+                case ProductActivationKind.ReturnLive:
+                    await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Live)
+                        .ConfigureAwait(false);
+                    Trace.TraceInformation("Product runtime returned to Live mode.");
+                    break;
+                default:
+                    Trace.TraceInformation("Received product activation {0}.", activation.Kind);
+                    break;
             }
-
-            Trace.TraceInformation("Received product activation {0}.", activation.Kind);
         }
     }
 

@@ -176,6 +176,12 @@ public sealed class PresentationStatePublisherTests
             Calls.Add((fact, decision));
             return fail ? ValueTask.FromException(new InvalidOperationException("Presentation unavailable")) : ValueTask.CompletedTask;
         }
+        public ValueTask PublishCommanderVesselAsync(
+            CommanderVesselFact fact,
+            CancellationToken cancellationToken = default)
+            => fail
+                ? ValueTask.FromException(new InvalidOperationException("Presentation unavailable"))
+                : ValueTask.CompletedTask;
         public IAsyncEnumerable<PresentationSnapshot> ReadUpdatesAsync(CancellationToken cancellationToken = default)
             => NullPresentationPublisher.Instance.ReadUpdatesAsync(cancellationToken);
     }

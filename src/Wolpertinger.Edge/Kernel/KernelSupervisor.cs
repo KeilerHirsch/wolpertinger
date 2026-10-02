@@ -304,6 +304,8 @@ public sealed class KernelSupervisor : IAsyncDisposable
             throw new KernelDivergenceException("Active/Shadow status divergence.");
         if (!Equals(active.JumpFact, shadow.JumpFact))
             throw new KernelDivergenceException("Active/Shadow JumpFact divergence.");
+        if (!Equals(active.CommanderVesselFact, shadow.CommanderVesselFact))
+            throw new KernelDivergenceException("Active/Shadow Commander/Vessel fact divergence.");
     }
 
     private static int Compare(ObservationCursor left, ObservationCursor right)

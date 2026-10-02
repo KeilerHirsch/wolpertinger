@@ -49,8 +49,7 @@ public sealed class TrustedObservationDispatcher : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(receipt);
         if (!receipt.IsDurable)
             throw new InvalidOperationException("Journal dispatch requires durable raw evidence.");
-        if (receipt.SourceKind != RawEvidenceSourceKind.LocalJournal)
-            throw new InvalidDataException("Journal dispatch requires LocalJournal evidence.");
+        _ = JournalEvidenceProvenance.Map(receipt.SourceKind);
         if (_supervisor.Lifecycle != KernelSupervisorLifecycle.Synchronized)
             throw new InvalidOperationException(
                 $"Ingest is unavailable while trusted authority is {_supervisor.Lifecycle}; reopen and replay if faulted.");
@@ -135,6 +134,73 @@ public sealed class TrustedObservationDispatcher : IAsyncDisposable
             }
         }
     }
+    public async Task ProcessCommanderVesselEvidenceAsync(
+        RawEvidenceReceipt receipt,
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(receipt);
+        if (!receipt.IsDurable)
+            throw new InvalidOperationException("Commander/Vessel dispatch requires durable raw evidence.");
+        if (receipt.SourceKind is not (RawEvidenceSourceKind.FrontierApi or RawEvidenceSourceKind.Sample))
+            throw new InvalidDataException("Commander/Vessel dispatch requires FrontierApi or explicit Sample evidence.");
+        if (_supervisor.Lifecycle != KernelSupervisorLifecycle.Synchronized)
+            throw new InvalidOperationException(
+                $"Ingest is unavailable while trusted authority is {_supervisor.Lifecycle}; reopen and replay if faulted.");
+        if (_identity.CurrentBinding is null)
+        {
+            await RejectAsync(
+                receipt,
+                "IdentityPending",
+                "Commander/Vessel profile arrived before authoritative session binding.",
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        JsonDocument? document = null;
+        try
+        {
+            document = JsonDocument.Parse(payload);
+        }
+        catch (JsonException ex)
+        {
+            await RejectAsync(receipt, "InvalidJson", ex.Message, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        using (document)
+        {
+            ObservationEnvelopeDraft draft;
+            try
+            {
+                draft = Frontier.FrontierProfileNormalizer.Normalize(
+                    receipt, document.RootElement, _identity.CurrentBinding);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or FormatException or OverflowException)
+            {
+                await RejectAsync(
+                    receipt,
+                    "NormalizationRejected",
+                    ex.Message,
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var commit = await _ledger.CommitAsync(
+                receipt,
+                NormalizationDisposition.Dispatchable,
+                draft,
+                cancellationToken).ConfigureAwait(false);
+            if (commit.Observation is not null)
+            {
+                await DispatchAsync(
+                    commit.Observation,
+                    receipt.Reference,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
     private async Task DispatchAsync(
         ObservationEnvelope observation,
         EvidenceReference reference,
@@ -146,6 +212,22 @@ public sealed class TrustedObservationDispatcher : IAsyncDisposable
         {
             _diagnostics.Add(new DiagnosticEvent(
                 "KernelRejected", reference.RawOrdinal, result.Status.ToString()));
+            return;
+        }
+
+        if (observation.Kind == ObservationKind.CommanderVessel)
+        {
+            var commander = CommanderVesselFactFactory.Create(observation, result);
+            try
+            {
+                await _presentationPublisher.PublishCommanderVesselAsync(
+                    commander, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.Add(new DiagnosticEvent(
+                    "PresentationPublishFailed", reference.RawOrdinal, ex.Message));
+            }
             return;
         }
 

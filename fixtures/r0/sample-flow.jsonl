@@ -1,0 +1,8 @@
+{"source":"journal","payload":{"timestamp":"2026-09-12T12:00:00Z","event":"Fileheader","part":1,"language":"English/UK","Odyssey":true,"gameversion":"4.2.2.0","build":"r300000/r0"}}
+{"source":"journal","payload":{"timestamp":"2026-09-12T12:00:01Z","event":"Commander","FID":"FSAMPLE0001","Name":"CMDR SAMPLE"}}
+{"source":"status","payload":{"Flags":0,"GuiFocus":0}}
+{"source":"commanderVessel","payload":{"commander":{"name":"CMDR SAMPLE","alive":true,"docked":false,"onfoot":false},"ship":{"name":"Sidewinder","alive":true}}}
+{"source":"journal","payload":{"timestamp":"2026-09-12T12:00:02Z","event":"FSDTarget","Name":"Sample Destination","SystemAddress":424242}}
+{"source":"journal","payload":{"timestamp":"2026-09-12T12:00:03Z","event":"StartJump","JumpType":"Hyperspace","StarSystem":"Sample Destination","SystemAddress":424242}}
+{"source":"journal","payload":{"timestamp":"2026-09-12T12:00:04Z","event":"FSDJump","StarSystem":"Sample Destination","SystemAddress":424242,"StarPos":[1.25,-2.5,3.75],"JumpDist":12.5,"FuelUsed":1.25,"FuelLevel":18.75}}
+{"source":"status","payload":{"Flags":0,"GuiFocus":0}}
