@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using Wolpertinger.AppHost.Activation;
 using Wolpertinger.AppHost.Preferences;
 using Wolpertinger.AppHost.Windows;
@@ -150,7 +151,10 @@ internal sealed class ProductRuntimeHost : IAsyncDisposable
                 if (eliteDataPath is not null)
                 {
                     telemetry = runtime.CreateTelemetryWatcher(eliteDataPath);
-                    telemetryTask = telemetry.RunAsync(stop.Token);
+                    telemetryTask = MonitorTelemetryAsync(
+                        telemetry.RunAsync(stop.Token),
+                        (reason, token) => runtime.ReportRuntimeFaultAsync(reason, token),
+                        stop.Token);
                 }
 
                 var optionsResult = FrontierOAuthOptionsFile.Read(
@@ -207,15 +211,12 @@ internal sealed class ProductRuntimeHost : IAsyncDisposable
         }
         catch
         {
-            stop.Cancel();
-            if (telemetryTask is not null)
-                await ObserveAsync(telemetryTask).ConfigureAwait(false);
-            if (telemetry is not null)
-                await telemetry.DisposeAsync().ConfigureAwait(false);
-            if (runtime is not null)
-                await runtime.DisposeAsync().ConfigureAwait(false);
-            frontierHttp?.Dispose();
-            stop.Dispose();
+            _ = await CleanupResourcesAsync(
+                stop,
+                telemetryTask,
+                telemetry,
+                runtime,
+                frontierHttp).ConfigureAwait(false);
             throw;
         }
     }
@@ -250,26 +251,92 @@ internal sealed class ProductRuntimeHost : IAsyncDisposable
         _frontierAccount = null;
         Mode = null;
 
-        stop?.Cancel();
-        if (telemetryTask is not null)
-            await ObserveAsync(telemetryTask).ConfigureAwait(false);
-        if (telemetry is not null)
-            await telemetry.DisposeAsync().ConfigureAwait(false);
-        if (runtime is not null)
-            await runtime.DisposeAsync().ConfigureAwait(false);
-        frontierHttp?.Dispose();
-        stop?.Dispose();
+        var failure = await CleanupResourcesAsync(
+            stop,
+            telemetryTask,
+            telemetry,
+            runtime,
+            frontierHttp).ConfigureAwait(false);
+        if (failure is not null)
+            ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
-    private static async Task ObserveAsync(Task task)
+    internal static async Task MonitorTelemetryAsync(
+        Task telemetryTask,
+        Func<string, CancellationToken, ValueTask> reportFault,
+        CancellationToken stopToken)
     {
+        ArgumentNullException.ThrowIfNull(telemetryTask);
+        ArgumentNullException.ThrowIfNull(reportFault);
         try
         {
-            await task.ConfigureAwait(false);
+            await telemetryTask.ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
         {
         }
+        catch (Exception ex)
+        {
+            try
+            {
+                await reportFault(
+                    $"TelemetryFault:{ex.GetType().Name}",
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception reportFailure)
+            {
+                Trace.TraceError(
+                    "Failed to publish telemetry runtime fault: {0}",
+                    reportFailure.Message);
+            }
+            throw;
+        }
+    }
+
+    internal static async Task<Exception?> CleanupResourcesAsync(
+        CancellationTokenSource? stop,
+        Task? telemetryTask,
+        IAsyncDisposable? telemetry,
+        IAsyncDisposable? runtime,
+        IDisposable? frontierHttp)
+    {
+        stop?.Cancel();
+        Exception? firstFailure = null;
+
+        if (telemetryTask is not null)
+        {
+            try
+            {
+                await telemetryTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stop?.IsCancellationRequested is true)
+            {
+            }
+            catch (Exception ex)
+            {
+                firstFailure ??= ex;
+            }
+        }
+
+        if (telemetry is not null)
+        {
+            try { await telemetry.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { firstFailure ??= ex; }
+        }
+
+        if (runtime is not null)
+        {
+            try { await runtime.DisposeAsync().ConfigureAwait(false); }
+            catch (Exception ex) { firstFailure ??= ex; }
+        }
+
+        try { frontierHttp?.Dispose(); }
+        catch (Exception ex) { firstFailure ??= ex; }
+
+        try { stop?.Dispose(); }
+        catch (Exception ex) { firstFailure ??= ex; }
+
+        return firstFailure;
     }
 
     public async ValueTask DisposeAsync()

@@ -9,6 +9,9 @@ public sealed record JournalSourceRecord(
 
 public sealed class JournalTailer
 {
+    private const int MaximumReadAttempts = 4;
+    private static readonly TimeSpan ReadRetryDelay = TimeSpan.FromMilliseconds(25);
+
     private readonly string _journalDirectory;
     private string? _currentPath;
     private ulong _nextOffset;
@@ -29,9 +32,7 @@ public sealed class JournalTailer
         if (!_initialized)
         {
             if (!Initialize(recovered))
-            {
                 yield break;
-            }
         }
 
         while (_currentPath is not null)
@@ -43,51 +44,90 @@ public sealed class JournalTailer
                     $"Journal source disappeared: {Path.GetFileName(_currentPath)}.");
             }
 
-            var data = await File.ReadAllBytesAsync(_currentPath, cancellationToken).ConfigureAwait(false);
-            if (_nextOffset > (ulong)data.LongLength)
-            {
-                throw new EvidenceCorruptionException(
-                    $"Journal source is shorter than recovered offset: {Path.GetFileName(_currentPath)}.");
-            }
-
             var sourceId = JournalSourceId.FromFileName(_currentPath);
-            var position = checked((int)_nextOffset);
+            var baseOffset = _nextOffset;
+            var data = await ReadTailBytesAsync(
+                _currentPath,
+                baseOffset,
+                cancellationToken).ConfigureAwait(false);
+
+            var position = 0;
             while (position < data.Length)
             {
                 var newline = Array.IndexOf(data, (byte)'\n', position);
                 if (newline < 0)
                 {
-                    _nextOffset = checked((ulong)position);
+                    _nextOffset = checked(baseOffset + (ulong)position);
                     yield break;
                 }
 
                 var sourceLength = checked(newline - position + 1);
                 var payloadLength = sourceLength - 1;
                 if (payloadLength > 0 && data[position + payloadLength - 1] == (byte)'\r')
-                {
                     payloadLength--;
-                }
 
                 var payload = data.AsSpan(position, payloadLength).ToArray();
+                var absoluteOffset = checked(baseOffset + (ulong)position);
                 var locator = new RawEvidenceSourceLocator(
                     sourceId,
-                    checked((ulong)position),
+                    absoluteOffset,
                     checked((uint)sourceLength));
                 position = newline + 1;
-                _nextOffset = checked((ulong)position);
+                _nextOffset = checked(baseOffset + (ulong)position);
                 yield return new JournalSourceRecord(payload, locator);
             }
 
             var later = EnumerateJournalFiles()
                 .FirstOrDefault(path => CompareJournalNames(path, _currentPath) > 0);
             if (later is null)
-            {
                 yield break;
-            }
 
             _currentPath = later;
             _nextOffset = 0;
         }
+    }
+
+    private static async Task<byte[]> ReadTailBytesAsync(
+        string path,
+        ulong offset,
+        CancellationToken cancellationToken)
+    {
+        IOException? lastFailure = null;
+        for (var attempt = 1; attempt <= MaximumReadAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await using var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete,
+                    bufferSize: 4096,
+                    FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+                if (offset > (ulong)stream.Length)
+                {
+                    throw new EvidenceCorruptionException(
+                        $"Journal source is shorter than recovered offset: {Path.GetFileName(path)}.");
+                }
+
+                stream.Position = checked((long)offset);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+                return buffer.ToArray();
+            }
+            catch (IOException ex)
+            {
+                lastFailure = ex;
+                if (attempt < MaximumReadAttempts)
+                    await Task.Delay(ReadRetryDelay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        throw new IOException(
+            $"Journal source could not be read after {MaximumReadAttempts} attempts: {Path.GetFileName(path)}.",
+            lastFailure);
     }
 
     private bool Initialize(IReadOnlyList<RecoveredRawEvidence> recovered)
@@ -121,9 +161,7 @@ public sealed class JournalTailer
         }
 
         if (files.Count == 0)
-        {
             return false;
-        }
 
         _currentPath = files[^1];
         _nextOffset = 0;
@@ -134,9 +172,7 @@ public sealed class JournalTailer
     private List<string> EnumerateJournalFiles()
     {
         if (!Directory.Exists(_journalDirectory))
-        {
             return [];
-        }
 
         var files = Directory.GetFiles(_journalDirectory, "Journal.*.log").ToList();
         files.Sort(CompareJournalNames);

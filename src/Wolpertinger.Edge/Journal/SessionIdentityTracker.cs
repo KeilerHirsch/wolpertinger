@@ -56,6 +56,7 @@ public sealed class SessionIdentityTracker
 {
     private FixedBytes16? _pendingSessionId;
     private GalaxyRealm _pendingRealm = GalaxyRealm.Unknown;
+    private ulong _nextSaveEpoch;
     private int? _expectedContinuationPart;
 
     public SessionBinding? CurrentBinding { get; private set; }
@@ -66,6 +67,7 @@ public sealed class SessionIdentityTracker
         CurrentBinding = binding;
         _pendingSessionId = binding.SessionId;
         _pendingRealm = binding.Profile.Realm;
+        _nextSaveEpoch = NextSaveEpoch(binding.Profile.SaveEpoch);
         _expectedContinuationPart = null;
     }
     public SessionIdentityResult Observe(RawEvidenceReceipt receipt, JsonElement root)
@@ -148,8 +150,9 @@ public sealed class SessionIdentityTracker
             return Snapshot();
         }
 
-        var profile = new ProfileKey(fid, _pendingRealm, SaveEpoch: 0);
+        var profile = new ProfileKey(fid, _pendingRealm, _nextSaveEpoch);
         CurrentBinding = new SessionBinding(_pendingSessionId.Value, profile);
+        _nextSaveEpoch = NextSaveEpoch(profile.SaveEpoch);
         var draft = CreateSessionBoundDraft(receipt, root, CurrentBinding);
         return new SessionIdentityResult(
             SessionIdentityStatus.SessionBound,
@@ -205,6 +208,13 @@ public sealed class SessionIdentityTracker
             SessionBoundPayload.Instance,
             JournalEvidenceProvenance.Map(receipt.SourceKind),
             JournalEvidenceProvenance.ProtocolVersion(receipt.SourceKind));
+
+    private static ulong NextSaveEpoch(ulong current)
+    {
+        if (current == ulong.MaxValue)
+            throw new InvalidDataException("Session save epoch is exhausted.");
+        return current + 1;
+    }
 
     private static FixedBytes16 DeriveSessionId(FixedBytes32 evidenceDigest)
     {

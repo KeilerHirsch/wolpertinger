@@ -107,6 +107,14 @@ if ($actualSdk -ne $requiredSdk) {
     throw "Pinned SDK mismatch. Required $requiredSdk, observed $actualSdk."
 }
 
+$sourceRevision = (& git -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sourceRevision)) {
+    throw 'Unable to resolve package source revision.'
+}
+if (@(& git -C $repoRoot status --porcelain).Count -ne 0) {
+    throw 'Package build requires a clean source worktree.'
+}
+
 if (-not (Test-Path -LiteralPath $manifestSource)) {
     throw "Package manifest missing: $manifestSource"
 }
@@ -132,7 +140,9 @@ $appHostArgs = @(
     '--self-contained','true',
     '-o',(Join-Path $publishRoot 'apphost'),
     '-p:DebugType=None',
-    '-p:DebugSymbols=false'
+    '-p:DebugSymbols=false',
+    "-p:SourceRevisionId=$sourceRevision",
+    '-p:ContinuousIntegrationBuild=true'
 )
 & $dotnet @appHostArgs
 if ($LASTEXITCODE -ne 0) {
@@ -147,7 +157,9 @@ $presentationArgs = @(
     '--self-contained','true',
     '-o',(Join-Path $publishRoot 'presentation'),
     '-p:DebugType=None',
-    '-p:DebugSymbols=false'
+    '-p:DebugSymbols=false',
+    "-p:SourceRevisionId=$sourceRevision",
+    '-p:ContinuousIntegrationBuild=true'
 )
 & $dotnet @presentationArgs
 if ($LASTEXITCODE -ne 0) {
@@ -208,6 +220,7 @@ $vsRoot = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools'
 $desktopBridgeTargets = Join-Path $vsRoot 'MSBuild\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets'
 Write-Output "PackagePath=$packagePath"
 Write-Output "PackageSHA256=$((Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash)"
+Write-Output "SourceRevision=$sourceRevision"
 Write-Output "IdentityName=$IdentityName"
 Write-Output "Publisher=$Publisher"
 Write-Output "Signing=UNSIGNED_LOCAL_GATE"

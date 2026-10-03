@@ -1,9 +1,11 @@
+with Interfaces;
 with Wolpertinger_Bounded_Text;
 
 package body Wolpertinger_Engine with SPARK_Mode is
 
    package Text renames Wolpertinger_Bounded_Text;
 
+   use type Interfaces.Unsigned_64;
    use type Types.Galaxy_Realm;
 
    function Make_Jump_Fact
@@ -58,9 +60,21 @@ package body Wolpertinger_Engine with SPARK_Mode is
 
       case Observation.Kind is
          when Types.Session_Bound =>
-            if State.Bound
-              or else Observation.Profile.FID.Length = 0
+            if Observation.Profile.FID.Length = 0
               or else Observation.Profile.Realm = Types.Unknown
+              or else
+                (Observation.Provenance /= Types.Local_Journal
+                 and then Observation.Provenance /= Types.Sample)
+            then
+               Result.Status := Invalid_Observation;
+               return;
+            end if;
+            if State.Bound
+              and then
+                (State.Profile.Save_Epoch = Interfaces.Unsigned_64'Last
+                 or else
+                   Observation.Profile.Save_Epoch
+                     /= State.Profile.Save_Epoch + 1)
             then
                Result.Status := Identity_Conflict;
                return;
@@ -69,10 +83,22 @@ package body Wolpertinger_Engine with SPARK_Mode is
             Candidate.Bound := True;
             Candidate.Profile := Observation.Profile;
             Candidate.Session_Id := Observation.Session_Id;
+            if State.Bound then
+               Candidate.Location := (others => <>);
+               Candidate.Fuel := (others => <>);
+               Candidate.Last_Jump_Distance := (others => <>);
+               Candidate.Commander_Vessel := (others => <>);
+            end if;
 
          when Types.FSD_Jump =>
             if not State_Types.Identity_Matches (State, Observation) then
                Result.Status := Identity_Conflict;
+               return;
+            end if;
+            if Observation.Provenance /= Types.Local_Journal
+              and then Observation.Provenance /= Types.Sample
+            then
+               Result.Status := Invalid_Observation;
                return;
             end if;
             Candidate.Location.Known := True;
