@@ -15,6 +15,9 @@ public sealed class NullPresentationPublisher : IPresentationPublisher
     public ValueTask PublishJumpAsync(JumpFact fact, ContextDecision decision, CancellationToken cancellationToken = default)
         => ValueTask.CompletedTask;
 
+    public ValueTask PublishCommanderVesselAsync(CommanderVesselFact fact, CancellationToken cancellationToken = default)
+        => ValueTask.CompletedTask;
+
     public async IAsyncEnumerable<PresentationSnapshot> ReadUpdatesAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {

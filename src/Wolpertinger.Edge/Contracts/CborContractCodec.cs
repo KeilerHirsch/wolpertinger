@@ -65,7 +65,7 @@ public static class CborContractCodec
             RequireKey(reader, 2); var epoch = reader.ReadUInt64();
             RequireKey(reader, 3); var cursor = ReadNullableCursor(reader);
             RequireKey(reader, 4); var stateDigest = ReadFixed32(reader);
-            RequireKey(reader, 5); var jumpFact = ReadNullableJumpFact(reader);
+            RequireKey(reader, 5); var jumpFact = ReadNullableJumpFact(reader, responseFieldCount == 8);
             RequireKey(reader, 6); var role = ReadKernelRole(reader);
             var commanderVesselFact = responseFieldCount == 8
                 ? ReadNullableCommanderVesselFactAfterKey(reader)
@@ -403,10 +403,11 @@ public static class CborContractCodec
         return (ushort)value;
     }
 
-    private static SourceProvenance ReadProvenance(CborReader reader)
+    private static SourceProvenance ReadProvenance(CborReader reader, bool allowSample)
     {
         var value = reader.ReadInt32();
-        if (value is < 0 or > 5)
+        var maximum = allowSample ? (int)SourceProvenance.Sample : (int)SourceProvenance.UserEntered;
+        if (value < 0 || value > maximum)
         {
             throw Violation("Unknown source provenance.");
         }
@@ -490,7 +491,7 @@ public static class CborContractCodec
             fuelLevel);
     }
 
-    private static KernelJumpFact? ReadNullableJumpFact(CborReader reader)
+    private static KernelJumpFact? ReadNullableJumpFact(CborReader reader, bool allowSample)
     {
         if (reader.PeekState() == CborReaderState.Null)
         {
@@ -511,9 +512,9 @@ public static class CborContractCodec
         var jumpDistance = ReadDecimal64(reader);
         var fuelUsed = ReadDecimal64(reader);
         var fuelLevel = ReadDecimal64(reader);
-        var locationProvenance = ReadProvenance(reader);
+        var locationProvenance = ReadProvenance(reader, allowSample);
         var locationFreshness = ReadFreshness(reader);
-        var fuelProvenance = ReadProvenance(reader);
+        var fuelProvenance = ReadProvenance(reader, allowSample);
         var fuelFreshness = ReadFreshness(reader);
         reader.ReadEndArray();
 

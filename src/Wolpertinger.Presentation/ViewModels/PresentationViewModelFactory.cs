@@ -106,6 +106,7 @@ public static class PresentationViewModelFactory
         PresentationProvenance.FrontierApi => "FrontierApi",
         PresentationProvenance.Community => "Community",
         PresentationProvenance.UserEntered => "UserEntered",
+        PresentationProvenance.Sample => "Sample",
         _ => throw new InvalidDataException("Undefined presentation provenance.")
     };
 

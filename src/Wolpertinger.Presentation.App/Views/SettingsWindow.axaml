@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Wolpertinger.Presentation.App.Views.SettingsWindow"
+        Title="WOLPERTINGER Settings"
+        Width="620" Height="620">
+  <ScrollViewer Margin="24">
+    <StackPanel Spacing="14">
+      <TextBlock Text="Settings" FontSize="26" FontWeight="Bold" />
+
+      <TextBlock Text="Presentation" FontWeight="Bold" />
+      <Button Content="Auto / Smart Hub" Click="OnSmartAuto" />
+      <ComboBox x:Name="CompositionChoice" />
+      <Button Content="Use selected composition for this session"
+              Click="OnManualComposition" />
+
+      <TextBlock Text="Frontier Account" FontWeight="Bold" Margin="0,12,0,0" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Connect" Click="OnConnectFrontier" />
+        <Button Content="Disconnect" Click="OnDisconnectFrontier" />
+      </StackPanel>
+
+      <TextBlock Text="Runtime mode" FontWeight="Bold" Margin="0,12,0,0" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Live" Click="OnReturnLive" />
+        <Button Content="Sample" Click="OnEnterSample" />
+      </StackPanel>
+
+      <TextBlock Text="Elite data" FontWeight="Bold" Margin="0,12,0,0" />
+      <Button Content="Locate Elite data…" Click="OnLocateEliteData" />
+
+      <TextBlock Text="Start with Windows" FontWeight="Bold" Margin="0,12,0,0" />
+      <TextBlock Text="Available only with MSIX package identity; no Registry/Startup-folder fallback."
+                 TextWrapping="Wrap" />
+
+      <TextBlock x:Name="StatusText" TextWrapping="Wrap" />
+    </StackPanel>
+  </ScrollViewer>
+</Window>

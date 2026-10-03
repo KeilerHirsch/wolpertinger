@@ -2,32 +2,38 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Wolpertinger.Presentation.ViewModels"
         x:Class="Wolpertinger.Presentation.App.Views.FullscreenHubWindow"
-        x:DataType="vm:JumpViewModel" Title="WOLPERTINGER Fullscreen Hub"
+        x:DataType="vm:SmartHubViewModel"
+        Title="WOLPERTINGER Fullscreen Hub"
         Width="960" Height="720">
   <DockPanel Margin="24">
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="24" Margin="0,0,0,20">
-      <TextBlock Text="WOLPERTINGER — Fullscreen hub" FontSize="24" VerticalAlignment="Center" />
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal"
+                Spacing="24" Margin="0,0,0,20">
+      <TextBlock Text="WOLPERTINGER — Smart Hub"
+                 FontSize="24" VerticalAlignment="Center" />
       <Button Content="Close hub" Click="OnCloseHub" />
     </StackPanel>
     <ScrollViewer>
-      <StackPanel Spacing="16">
-        <TextBlock x:Name="EmptyState" Text="Connecting — no validated jump available" TextWrapping="Wrap" />
-        <StackPanel x:Name="Body" IsVisible="False" Spacing="12">
-          <TextBlock Text="{Binding StarSystem}" FontSize="32" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding AvailabilityText}" TextWrapping="Wrap" />
+      <StackPanel Spacing="14">
+        <TextBlock x:Name="EmptyState"
+                   Text="Connecting — waiting for validated state"
+                   TextWrapping="Wrap" />
+        <StackPanel x:Name="Body" IsVisible="False" Spacing="10">
+          <TextBlock Text="{Binding SystemText}" FontSize="34" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding CommanderName, StringFormat='Commander: {0}'}" />
+          <TextBlock Text="{Binding ShipText, StringFormat='Vessel: {0}'}" />
+          <TextBlock Text="{Binding ContextText, StringFormat='Context: {0}'}" />
+          <TextBlock Text="{Binding CompositionText, StringFormat='Composition: {0}'}" />
+          <TextBlock Text="{Binding SelectionModeText, StringFormat='Mode: {0}'}" />
+          <TextBlock Text="{Binding RuntimeText, StringFormat='Runtime: {0}'}"
+                     TextWrapping="Wrap" />
+          <TextBlock Text="{Binding FrontierAccountText, StringFormat='Frontier: {0}'}"
+                     TextWrapping="Wrap" />
           <TextBlock Text="{Binding JumpDistanceText, StringFormat='Jump distance: {0}'}" />
-          <TextBlock Text="{Binding FuelLevelText, StringFormat='Remaining fuel: {0}'}" />
-          <TextBlock Text="{Binding FuelUsedText, StringFormat='Fuel used: {0}'}" />
-          <TextBlock Text="Position" FontWeight="Bold" />
-          <SelectableTextBlock Text="{Binding PositionX, StringFormat='X: {0}'}" />
-          <SelectableTextBlock Text="{Binding PositionY, StringFormat='Y: {0}'}" />
-          <SelectableTextBlock Text="{Binding PositionZ, StringFormat='Z: {0}'}" />
-          <TextBlock Text="Source and freshness" FontWeight="Bold" />
-          <TextBlock Text="{Binding LocationProvenanceText, StringFormat='Location source: {0}'}" />
-          <TextBlock Text="{Binding LocationStatusText, StringFormat='Location status: {0}'}" />
-          <TextBlock Text="{Binding FuelProvenanceText, StringFormat='Fuel source: {0}'}" />
-          <TextBlock Text="{Binding FuelStatusText, StringFormat='Fuel status: {0}'}" />
-          <TextBlock Text="{Binding ReasonCode, StringFormat='Reason: {0}'}" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding FuelLevelText, StringFormat='Fuel: {0}'}" />
+          <TextBlock Text="{Binding SystemSourceText, StringFormat='System source: {0}'}" />
+          <TextBlock Text="{Binding SystemFreshnessText, StringFormat='System freshness: {0}'}" />
+          <TextBlock Text="{Binding ReasonText, StringFormat='Reason: {0}'}"
+                     TextWrapping="Wrap" />
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

@@ -18,10 +18,7 @@ public static class FsdJumpNormalizer
         {
             throw new InvalidOperationException("FSDJump normalization requires durable raw evidence.");
         }
-        if (receipt.SourceKind != RawEvidenceSourceKind.LocalJournal)
-        {
-            throw new InvalidDataException("FSDJump normalization requires LocalJournal evidence.");
-        }
+        var provenance = JournalEvidenceProvenance.Map(receipt.SourceKind);
 
         if (JournalEventClassifier.Classify(root) != JournalEventKind.FsdJump)
         {
@@ -65,7 +62,8 @@ public static class FsdJumpNormalizer
             receipt.CommitUtc.ToUnixTimeMilliseconds(),
             MessageCount: 1,
             payload,
-            SourceProvenance.LocalJournal);
+            provenance,
+            JournalEvidenceProvenance.ProtocolVersion(receipt.SourceKind));
     }
 
     private static Decimal64 ParseNumber(JsonElement element, string name)

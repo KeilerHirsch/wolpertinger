@@ -33,6 +33,33 @@ public sealed class PresentationStatePublisherTests
     }
 
     [Fact]
+    public async Task ContextHealthAndAccountUpdatesAreAtomicAndMonotonic()
+    {
+        var publisher = new PresentationStatePublisher();
+        var intent = new PresentationIntent(
+            PresentationComposition.Flight, false, "ContextFlight", PresentationSelectionMode.Auto);
+
+        await publisher.PublishContextAsync(PresentationGameContext.Supercruise, intent);
+        var context = publisher.Current;
+        Assert.Equal(1UL, context.Revision);
+        Assert.Equal(PresentationGameContext.Supercruise, context.Context);
+        Assert.Equal(intent, context.Intent);
+        Assert.Equal(ProductRuntimeHealth.Starting, context.RuntimeHealth.Health);
+
+        await publisher.PublishRuntimeHealthAsync(new(ProductRuntimeHealth.Ready, "Ready"));
+        Assert.Equal(2UL, publisher.Current.Revision);
+        Assert.Equal(intent, publisher.Current.Intent);
+
+        await publisher.PublishFrontierAccountAsync(new(
+            FrontierAccountState.Connected, PresentationFreshness.Current, 123, "Connected"));
+        Assert.Equal(3UL, publisher.Current.Revision);
+        Assert.Equal(PresentationGameContext.Supercruise, publisher.Current.Context);
+        Assert.Equal(ProductRuntimeHealth.Ready, publisher.Current.RuntimeHealth.Health);
+        Assert.Equal(FrontierAccountState.Connected, publisher.Current.FrontierAccount.State);
+        PresentationSnapshotValidator.Validate(publisher.Current);
+    }
+
+    [Fact]
     public async Task BurstNeverWaitsForReaderAndOnlyLatestUpdateRemainsPending()
     {
         var publisher = new PresentationStatePublisher();
@@ -149,6 +176,12 @@ public sealed class PresentationStatePublisherTests
             Calls.Add((fact, decision));
             return fail ? ValueTask.FromException(new InvalidOperationException("Presentation unavailable")) : ValueTask.CompletedTask;
         }
+        public ValueTask PublishCommanderVesselAsync(
+            CommanderVesselFact fact,
+            CancellationToken cancellationToken = default)
+            => fail
+                ? ValueTask.FromException(new InvalidOperationException("Presentation unavailable"))
+                : ValueTask.CompletedTask;
         public IAsyncEnumerable<PresentationSnapshot> ReadUpdatesAsync(CancellationToken cancellationToken = default)
             => NullPresentationPublisher.Instance.ReadUpdatesAsync(cancellationToken);
     }

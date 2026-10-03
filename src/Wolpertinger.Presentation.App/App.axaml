@@ -9,11 +9,18 @@
       <TrayIcon Icon="/Assets/wolpertinger.ico" ToolTipText="WOLPERTINGER">
         <TrayIcon.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Show overlay" Click="OnToggleOverlay" />
-            <NativeMenuItem Header="Fullscreen hub" Click="OnShowHub" />
-            <NativeMenuItem Header="Diagnostics" Click="OnShowDiagnostics" />
+            <NativeMenuItem Header="Open WOLPERTINGER" Click="OnOpen" />
+            <NativeMenuItem Header="Overlay" Click="OnToggleOverlay" />
+            <NativeMenuItem Header="Frontier Account" Click="OnConnectFrontier" />
+            <NativeMenuItem Header="Sample Mode" Click="OnEnterSample" />
             <NativeMenuItemSeparator />
-            <NativeMenuItem Header="Exit presentation" Click="OnExitPresentation" />
+            <NativeMenuItem Header="Settings" Click="OnShowSettings" />
+            <NativeMenuItem Header="Diagnostics" Click="OnShowDiagnostics" />
+            <NativeMenuItem Header="Start with Windows"
+                            IsEnabled="False"
+                            ToolTip="Requires MSIX package identity" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Exit WOLPERTINGER" Click="OnExit" />
           </NativeMenu>
         </TrayIcon.Menu>
       </TrayIcon>

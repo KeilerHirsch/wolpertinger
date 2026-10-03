@@ -51,6 +51,8 @@ public sealed class PresentationStore
         return true;
     }
 
+    public void MarkConnecting() => SetConnection(PresentationConnectionState.Connecting);
+
     public void MarkDisconnected() => SetConnection(PresentationConnectionState.Disconnected);
 
     public void MarkIncompatible() => SetConnection(PresentationConnectionState.Incompatible);

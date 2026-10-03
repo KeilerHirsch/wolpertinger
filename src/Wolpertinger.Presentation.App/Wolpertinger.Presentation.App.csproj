@@ -11,6 +11,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <ProjectReference Include="../Wolpertinger.Presentation/Wolpertinger.Presentation.csproj" />
     <ProjectReference Include="../Wolpertinger.Presentation.Windows/Wolpertinger.Presentation.Windows.csproj" />
+    <ProjectReference Include="../Wolpertinger.Product.Contracts/Wolpertinger.Product.Contracts.csproj" />
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
 </Project>

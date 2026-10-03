@@ -125,6 +125,27 @@ public sealed class PresentationViewModelFactoryTests
     }
 
     [Fact]
+    public void SampleProvenanceRemainsExplicitInDiagnostics()
+    {
+        var snapshot = CreateSnapshot(8);
+        snapshot = snapshot with
+        {
+            Jump = snapshot.Jump! with
+            {
+                LocationProvenance = PresentationProvenance.Sample,
+                FuelProvenance = PresentationProvenance.Sample,
+            },
+        };
+        var store = new PresentationStore();
+        Assert.True(store.ApplySnapshot(snapshot));
+
+        var vm = PresentationViewModelFactory.CreateDiagnostics(store.State);
+
+        Assert.Equal("Sample", vm.LocationProvenanceText);
+        Assert.Equal("Sample", vm.FuelProvenanceText);
+    }
+
+    [Fact]
     public void PreferenceDefaultsAreBoundedAndExplicit()
     {
         Assert.Equal(new PresentationPreferences(true, false, DockPreset.Right, DensityPreset.Standard, null), PresentationPreferences.Default);
@@ -138,6 +159,8 @@ public sealed class PresentationViewModelFactoryTests
         return new PresentationSnapshot(
             PresentationProtocol.Version,
             revision,
+            PresentationGameContext.PostJump,
+            new PresentationIntent(PresentationComposition.PostJump, true, "ContextPostJump", PresentationSelectionMode.Auto),
             new JumpPresentation(
                 new PresentationCursor(123, 2),
                 new PresentationProfile("F123456", PresentationRealm.Live, 7),
@@ -156,6 +179,9 @@ public sealed class PresentationViewModelFactoryTests
                 locationFreshness,
                 PresentationProvenance.LocalStatus,
                 fuelFreshness,
-                "JumpCompleted"));
+                "JumpCompleted"),
+            null,
+            new RuntimeHealthPresentation(ProductRuntimeHealth.Ready, "Ready"),
+            new FrontierAccountPresentation(FrontierAccountState.Disconnected, PresentationFreshness.Unknown, null, "NotConnected"));
     }
 }

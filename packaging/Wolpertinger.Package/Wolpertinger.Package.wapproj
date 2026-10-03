@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build"
+         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{7F0C634C-EA0C-4D0F-9F46-91CB1F6D2A51}</ProjectGuid>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+    <Content Include="Assets\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Wolpertinger.AppHost\Wolpertinger.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\Wolpertinger.Presentation.App\Wolpertinger.Presentation.App.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <DesktopBridgeProps>$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props</DesktopBridgeProps>
+    <DesktopBridgeTargets>$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets</DesktopBridgeTargets>
+  </PropertyGroup>
+
+  <Target Name="Build"
+          Condition="!Exists('$(DesktopBridgeTargets)')">
+    <Error Text="Windows Application Packaging Project targets are not installed. Install the Visual Studio MSIX/Desktop Bridge packaging workload before Store/MSIXUPLOAD builds." />
+  </Target>
+
+  <Import Project="$(DesktopBridgeProps)" Condition="Exists('$(DesktopBridgeProps)')" />
+  <Import Project="$(DesktopBridgeTargets)" Condition="Exists('$(DesktopBridgeTargets)')" />
+</Project>
