@@ -146,6 +146,58 @@ procedure Test_Engine is
       end if;
    end Assert_Commander_Vessel;
 
+   procedure Test_Rebind_And_Jump_Provenance is
+      State : State_Types.Kernel_State;
+      Before : State_Types.Kernel_State;
+      Result : Engine.Apply_Result;
+      Session : Types.Observation := Session_Observation;
+      Jump : Types.Observation := Jump_Observation;
+      Rebind : Types.Observation := Session_Observation;
+      Bad_Rebind : Types.Observation := Session_Observation;
+      Unauthorized : Types.Observation := Jump_Observation;
+   begin
+      Engine.Apply (State, Session, Result);
+      Assert.Assert (Result.Status = Engine.Applied, "initial session must bind");
+      Engine.Apply (State, Jump, Result);
+      Assert.Assert (Result.Status = Engine.Applied, "initial jump must apply");
+      Assert.Assert (State.Location.Known, "initial jump must establish location");
+
+      Rebind.Cursor := (Evidence_Sequence => 3, Message_Ordinal => 0);
+      Rebind.Evidence_Digest := [others => 16#44#];
+      Rebind.Session_Id := [others => 16#B0#];
+      Rebind.Profile.Save_Epoch := 1;
+      Engine.Apply (State, Rebind, Result);
+      Assert.Assert (Result.Status = Engine.Applied, "next save epoch must rebind");
+      Assert.Assert (State.Profile.Save_Epoch = 1, "rebind must advance save epoch");
+      Assert.Assert (State.Session_Id = Rebind.Session_Id, "rebind must replace session id");
+      Assert.Assert (not State.Location.Known, "rebind must clear session location");
+      Assert.Assert (not State.Fuel.Known, "rebind must clear session fuel");
+      Assert.Assert (not State.Commander_Vessel.Known, "rebind must clear profile snapshot");
+
+      Before := State;
+      Bad_Rebind := Rebind;
+      Bad_Rebind.Cursor := (Evidence_Sequence => 4, Message_Ordinal => 0);
+      Bad_Rebind.Evidence_Digest := [others => 16#55#];
+      Bad_Rebind.Session_Id := [others => 16#C0#];
+      Bad_Rebind.Profile.Save_Epoch := 1;
+      Engine.Apply (State, Bad_Rebind, Result);
+      Assert.Assert
+        (Result.Status = Engine.Identity_Conflict,
+         "same save epoch must not rebind twice");
+      Assert.Assert (State = Before, "invalid rebind must not mutate state");
+
+      Unauthorized.Cursor := (Evidence_Sequence => 4, Message_Ordinal => 0);
+      Unauthorized.Evidence_Digest := [others => 16#66#];
+      Unauthorized.Session_Id := Rebind.Session_Id;
+      Unauthorized.Profile := Rebind.Profile;
+      Unauthorized.Provenance := Types.Community;
+      Engine.Apply (State, Unauthorized, Result);
+      Assert.Assert
+        (Result.Status = Engine.Invalid_Observation,
+         "community jump provenance must be rejected");
+      Assert.Assert (State = Before, "unauthorized provenance must not mutate state");
+   end Test_Rebind_And_Jump_Provenance;
+
    procedure Test_Commander_Vessel_Bounds is
       Malformed : constant String := [1 => Character'Val (16#C3#)];
       Overlong : constant String :=
@@ -284,5 +336,6 @@ procedure Test_Engine is
 begin
    Test_Happy_Path;
    Test_Ordering_And_Identity;
+   Test_Rebind_And_Jump_Provenance;
    Test_Commander_Vessel_Bounds;
 end Test_Engine;

@@ -2,7 +2,7 @@
 
 This directory contains the R0 Windows package boundary.
 
-`Build-R0Package.ps1` creates a deterministic **local unsigned** x64 MSIX using the repository-pinned .NET SDK, the trusted Ada kernel, and the installed Windows SDK `MakeAppx.exe`. It does not install tooling, create certificates, trust publishers, install the package, or upload anything.
+`Build-R0Package.ps1` creates a **local unsigned** x64 MSIX using the repository-pinned .NET SDK, the trusted Ada kernel, and the installed Windows SDK `MakeAppx.exe`. The build requires a clean worktree and stamps managed binaries with the exact Git `HEAD` via `SourceRevisionId`. The script does **not** claim byte-for-byte reproducible MSIX output because package timestamps/tool output can vary. It does not install tooling, create certificates, trust publishers, install the package, or upload anything.
 
 `Verify-R0Package.ps1` unpacks the MSIX and verifies the manifest and exact payload boundary. It rejects engineering/test binaries, PDBs, repository source, credential containers, and missing self-contained runtime files.
 

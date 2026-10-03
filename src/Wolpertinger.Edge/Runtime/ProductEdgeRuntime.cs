@@ -23,6 +23,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, 
     private readonly CancellationTokenSource _presentationCancellation;
     private readonly Task _presentationTask;
     private readonly SemaphoreSlim _ingestGate = new(1, 1);
+    // Presentation-only context hint. It never owns or mutates authoritative kernel state.
     private readonly GameContextTracker _gameContext;
     private readonly SmartPresentationPolicy _presentationPolicy = new();
     private readonly PresentationStatePublisher _presentationPublisher;
@@ -63,6 +64,17 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, 
     public GameContext CurrentGameContext => _gameContext.Current;
     public PresentationSnapshot CurrentPresentation => _presentationPublisher.Current;
     public event Action<GameContextTransition>? GameContextChanged;
+
+    public ValueTask ReportRuntimeFaultAsync(
+        string reasonCode,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reasonCode);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _presentationPublisher.PublishRuntimeHealthAsync(
+            new RuntimeHealthPresentation(ProductRuntimeHealth.Faulted, reasonCode),
+            cancellationToken);
+    }
 
     public static Task<ProductEdgeRuntime> OpenAsync(
         ProductRuntimePaths paths,
