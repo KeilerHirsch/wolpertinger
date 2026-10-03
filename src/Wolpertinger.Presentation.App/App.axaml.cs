@@ -34,8 +34,24 @@ public partial class App : Application
                 icon.Dispose();
     }
 
-    private async void OnToggleOverlay(object? sender, EventArgs args) => await controller.ToggleOverlayAsync();
-    private async void OnShowHub(object? sender, EventArgs args) => await controller.ShowHubAsync();
-    private async void OnShowDiagnostics(object? sender, EventArgs args) => await controller.ShowDiagnosticsAsync();
-    private async void OnExitPresentation(object? sender, EventArgs args) => await controller.ExitAsync();
+    private async void OnOpen(object? sender, EventArgs args)
+        => await controller.ShowHubAsync();
+
+    private async void OnToggleOverlay(object? sender, EventArgs args)
+        => await controller.ToggleOverlayAsync();
+
+    private async void OnConnectFrontier(object? sender, EventArgs args)
+        => await controller.ConnectFrontierAsync();
+
+    private async void OnEnterSample(object? sender, EventArgs args)
+        => await controller.EnterSampleAsync();
+
+    private async void OnShowSettings(object? sender, EventArgs args)
+        => await controller.ShowSettingsAsync();
+
+    private async void OnShowDiagnostics(object? sender, EventArgs args)
+        => await controller.ShowDiagnosticsAsync();
+
+    private async void OnExit(object? sender, EventArgs args)
+        => await controller.ExitAsync();
 }

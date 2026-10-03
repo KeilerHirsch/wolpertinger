@@ -17,7 +17,9 @@ public sealed class ActivationChannelTests
     [Fact]
     public async Task FrameRoundTripsWithBigEndianLengthPrefix()
     {
-        var activation = new ProductActivation(ProductActivationKind.SetEliteDataPath, @"C:\Elite");
+        var activation = new ProductActivation(
+            ProductActivationKind.SetManualComposition,
+            "Flight");
         await using var stream = new MemoryStream();
         await ActivationChannel.WriteFrameAsync(stream, activation);
         var bytes = stream.ToArray();

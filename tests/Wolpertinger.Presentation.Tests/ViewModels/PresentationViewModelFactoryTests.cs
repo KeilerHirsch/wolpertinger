@@ -125,6 +125,27 @@ public sealed class PresentationViewModelFactoryTests
     }
 
     [Fact]
+    public void SampleProvenanceRemainsExplicitInDiagnostics()
+    {
+        var snapshot = CreateSnapshot(8);
+        snapshot = snapshot with
+        {
+            Jump = snapshot.Jump! with
+            {
+                LocationProvenance = PresentationProvenance.Sample,
+                FuelProvenance = PresentationProvenance.Sample,
+            },
+        };
+        var store = new PresentationStore();
+        Assert.True(store.ApplySnapshot(snapshot));
+
+        var vm = PresentationViewModelFactory.CreateDiagnostics(store.State);
+
+        Assert.Equal("Sample", vm.LocationProvenanceText);
+        Assert.Equal("Sample", vm.FuelProvenanceText);
+    }
+
+    [Fact]
     public void PreferenceDefaultsAreBoundedAndExplicit()
     {
         Assert.Equal(new PresentationPreferences(true, false, DockPreset.Right, DensityPreset.Standard, null), PresentationPreferences.Default);

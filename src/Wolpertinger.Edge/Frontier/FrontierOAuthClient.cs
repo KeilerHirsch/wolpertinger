@@ -70,19 +70,21 @@ public sealed class FrontierOAuthClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(callback);
-        var pending = ConsumePending();
+        var expectedCallback = _options.ApplicationCallbackUri ?? _options.RedirectUri;
+        if (!MatchesRedirect(callback, expectedCallback))
+            throw new InvalidOperationException("Frontier callback redirect does not match the expected application callback URI.");
+
+        var query = ParseQuery(callback.Query);
+        if (!query.TryGetValue("state", out var state) || string.IsNullOrWhiteSpace(state))
+            throw new InvalidOperationException("Frontier callback state validation failed.");
+
+        var pending = ConsumePending(state);
         try
         {
-            if (!MatchesRedirect(callback, _options.RedirectUri))
-                throw new InvalidOperationException("Frontier callback redirect does not match the registered redirect URI.");
-
-            var query = ParseQuery(callback.Query);
             if (query.ContainsKey("error"))
                 throw new InvalidOperationException("Frontier authorization was denied or returned an error.");
             if (!query.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
                 throw new InvalidOperationException("Frontier callback is missing an authorization code.");
-            if (!query.TryGetValue("state", out var state) || !StateMatches(state, pending.StateBytes))
-                throw new InvalidOperationException("Frontier callback state validation failed.");
 
             return await ExchangeCodeAsync(code, pending.VerifierBytes, cancellationToken)
                 .ConfigureAwait(false);
@@ -168,12 +170,14 @@ public sealed class FrontierOAuthClient
         return builder.Uri;
     }
 
-    private PendingAuthorization ConsumePending()
+    private PendingAuthorization ConsumePending(string state)
     {
         lock (_gate)
         {
             var pending = _pending
                 ?? throw new InvalidOperationException("No Frontier authorization is pending.");
+            if (!StateMatches(state, pending.StateBytes))
+                throw new InvalidOperationException("Frontier callback state validation failed.");
             _pending = null;
             return pending;
         }

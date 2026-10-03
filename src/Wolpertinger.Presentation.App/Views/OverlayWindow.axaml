@@ -2,23 +2,31 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Wolpertinger.Presentation.ViewModels"
         x:Class="Wolpertinger.Presentation.App.Views.OverlayWindow"
-        x:DataType="vm:JumpViewModel" Title="WOLPERTINGER Overlay"
-        Width="300" Height="480">
-  <StackPanel Margin="16" Spacing="6" IsHitTestVisible="False">
-    <TextBlock x:Name="EmptyState" Text="Connecting — no validated jump available" TextWrapping="Wrap" />
-    <StackPanel x:Name="Body" IsVisible="False" Spacing="6">
+        x:DataType="vm:SmartHubViewModel"
+        Title="WOLPERTINGER Overlay"
+        Width="320" Height="500">
+  <StackPanel Margin="16" Spacing="7" IsHitTestVisible="False">
+    <TextBlock x:Name="EmptyState"
+               Text="Connecting — waiting for validated state"
+               TextWrapping="Wrap" />
+    <StackPanel x:Name="Body" IsVisible="False" Spacing="7">
       <Grid ColumnDefinitions="Auto,*">
         <TextBlock Text="WOLPERTINGER" FontWeight="Bold" />
-        <TextBlock Grid.Column="1" Text="{Binding AvailabilityText}" HorizontalAlignment="Right" />
+        <TextBlock Grid.Column="1" Text="{Binding ConnectionText}"
+                   HorizontalAlignment="Right" />
       </Grid>
-      <TextBlock Text="{Binding StarSystem}" FontSize="22" TextWrapping="Wrap" />
-      <StackPanel Orientation="Horizontal" Spacing="16">
-        <TextBlock Text="{Binding JumpDistanceText, StringFormat='Jump: {0}'}" />
-        <TextBlock Text="{Binding FuelLevelText, StringFormat='Fuel: {0}'}" />
+      <TextBlock Text="{Binding SystemText}" FontSize="22" TextWrapping="Wrap" />
+      <StackPanel Spacing="3">
+        <TextBlock Text="{Binding CommanderName, StringFormat='CMDR {0}'}" />
+        <TextBlock Text="{Binding ShipText}" TextWrapping="Wrap" />
       </StackPanel>
-      <StackPanel Orientation="Horizontal" Spacing="12">
-        <TextBlock Text="{Binding LocationStatusText, StringFormat='Location: {0}'}" />
-        <TextBlock Text="{Binding FuelStatusText, StringFormat='Fuel: {0}'}" />
+      <StackPanel Spacing="3">
+        <TextBlock Text="{Binding CompositionText, StringFormat='View: {0}'}" />
+        <StackPanel Orientation="Horizontal" Spacing="14">
+          <TextBlock Text="{Binding JumpDistanceText, StringFormat='Jump: {0}'}" />
+          <TextBlock Text="{Binding FuelLevelText, StringFormat='Fuel: {0}'}" />
+        </StackPanel>
+        <TextBlock Text="{Binding SystemSourceText, StringFormat='Source: {0}'}" />
       </StackPanel>
     </StackPanel>
   </StackPanel>

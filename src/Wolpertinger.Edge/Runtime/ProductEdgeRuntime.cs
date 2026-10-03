@@ -28,6 +28,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, 
     private readonly PresentationStatePublisher _presentationPublisher;
     private readonly IReadOnlyList<RecoveredRawEvidence> _recoveredEvidence;
     private IFrontierAccountStateSource? _frontierAccountStateSource;
+    private PresentationComposition? _manualComposition;
     private bool _disposed;
 
     private ProductEdgeRuntime(
@@ -303,6 +304,54 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, 
         AtomicSnapshotReader? snapshotReader = null)
         => new(eliteDataDirectory, this, _recoveredEvidence, snapshotReader);
 
+    public FrontierCapiClient CreateFrontierCapiClient(
+        HttpClient http,
+        Uri profileEndpoint)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new FrontierCapiClient(http, profileEndpoint, _evidence);
+    }
+
+    public async Task ProcessFrontierProfileSnapshotAsync(
+        FrontierProfileSnapshot snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        await _ingestGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            await _dispatcher.ProcessCommanderVesselEvidenceAsync(
+                snapshot.EvidenceReceipt,
+                snapshot.ResponseBytes,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _ingestGate.Release();
+        }
+    }
+
+    public void SetManualComposition(PresentationComposition composition)
+    {
+        if (!Enum.IsDefined(composition))
+            throw new ArgumentOutOfRangeException(nameof(composition));
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _manualComposition = composition;
+        PublishPresentationContext(new GameContextTransition(
+            _gameContext.Current,
+            GameContextSignalOrigin.Lifecycle));
+    }
+
+    public void SetSmartAuto()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _manualComposition = null;
+        PublishPresentationContext(new GameContextTransition(
+            _gameContext.Current,
+            GameContextSignalOrigin.Lifecycle));
+    }
+
     public void AttachFrontierAccountService(IFrontierAccountStateSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -335,7 +384,7 @@ public sealed class ProductEdgeRuntime : IAsyncDisposable, IEliteTelemetrySink, 
 
     private void PublishPresentationContext(GameContextTransition transition)
     {
-        var intent = _presentationPolicy.Decide(transition);
+        var intent = _presentationPolicy.Decide(transition, _manualComposition);
         _presentationPublisher.PublishContextAsync(Map(transition.Context), intent)
             .GetAwaiter().GetResult();
     }

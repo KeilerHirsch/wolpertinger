@@ -106,6 +106,14 @@ public sealed class ProductEdgeRuntimeTests
         Assert.Equal(PresentationComposition.Flight, runtime.CurrentPresentation.Intent.Composition);
         Assert.Equal(PresentationSelectionMode.Auto, runtime.CurrentPresentation.Intent.SelectionMode);
 
+        runtime.SetManualComposition(PresentationComposition.GalaxyMap);
+        Assert.Equal(PresentationComposition.GalaxyMap, runtime.CurrentPresentation.Intent.Composition);
+        Assert.Equal(PresentationSelectionMode.Manual, runtime.CurrentPresentation.Intent.SelectionMode);
+
+        runtime.SetSmartAuto();
+        Assert.Equal(PresentationComposition.Flight, runtime.CurrentPresentation.Intent.Composition);
+        Assert.Equal(PresentationSelectionMode.Auto, runtime.CurrentPresentation.Intent.SelectionMode);
+
         await runtime.DisposeAsync();
         Assert.Equal(ProductRuntimeHealth.Stopped, runtime.CurrentPresentation.RuntimeHealth.Health);
         Assert.Equal(PresentationGameContext.Supercruise, runtime.CurrentPresentation.Context);

@@ -4,7 +4,7 @@ using Wolpertinger.Presentation.Contracts;
 
 namespace Wolpertinger.Presentation.Transport;
 
-public sealed class PresentationPipeClient(string pipeName = PresentationProtocol.DefaultPipeName)
+public sealed class PresentationPipeClient(string pipeName = PresentationProtocol.DefaultPipeName) : IPresentationSnapshotClient
 {
     public async IAsyncEnumerable<PresentationSnapshot> ReadSnapshotsAsync(
         [EnumeratorCancellation] CancellationToken ct = default)

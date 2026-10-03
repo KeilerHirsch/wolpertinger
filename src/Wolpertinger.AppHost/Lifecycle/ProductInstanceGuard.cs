@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Wolpertinger.AppHost.Activation;
 using Wolpertinger.Product.Contracts;
 
@@ -23,11 +21,8 @@ public sealed class ProductInstanceGuard : IDisposable
     public static ProductInstanceGuard Acquire(string productId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(productId);
-        var userKey = $"{Environment.UserDomainName}\\{Environment.UserName}";
-        var digest = Convert.ToHexString(SHA256.HashData(
-            Encoding.UTF8.GetBytes($"{productId}|{userKey}")))[..24];
-        var mutexName = $"Local\\WOLPERTINGER.{digest}.instance";
-        var pipeName = $"WOLPERTINGER.{digest}.activation";
+        var mutexName = ProductActivationEndpoint.MutexName(productId);
+        var pipeName = ProductActivationEndpoint.PipeName(productId);
         var mutex = new Mutex(initiallyOwned: false, mutexName, out var createdNew);
         return new ProductInstanceGuard(mutex, createdNew, pipeName);
     }

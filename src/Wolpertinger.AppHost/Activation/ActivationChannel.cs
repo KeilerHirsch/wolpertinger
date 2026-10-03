@@ -1,14 +1,11 @@
-﻿using System.Buffers.Binary;
 using System.IO.Pipes;
-using System.Text.Json;
 using Wolpertinger.Product.Contracts;
 
 namespace Wolpertinger.AppHost.Activation;
 
 public sealed class ActivationChannel
 {
-    public const int MaximumPayloadBytes = 8_192;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    public const int MaximumPayloadBytes = ProductActivationCodec.MaximumFrameBytes;
     private readonly string _pipeName;
 
     public ActivationChannel(string pipeName)
@@ -27,7 +24,8 @@ public sealed class ActivationChannel
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-        return await ReadFrameAsync(server, cancellationToken).ConfigureAwait(false);
+        return await ProductActivationCodec.ReadAsync(
+            server, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SendAsync(
@@ -40,70 +38,18 @@ public sealed class ActivationChannel
             PipeDirection.Out,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        await WriteFrameAsync(client, activation, cancellationToken).ConfigureAwait(false);
+        await ProductActivationCodec.WriteAsync(
+            client, activation, cancellationToken).ConfigureAwait(false);
     }
 
-    public static async ValueTask WriteFrameAsync(
+    public static ValueTask WriteFrameAsync(
         Stream stream,
         ProductActivation activation,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(stream);
-        ArgumentNullException.ThrowIfNull(activation);
-        if (!Enum.IsDefined(activation.Kind))
-            throw new InvalidDataException("Activation kind is undefined.");
+        => ProductActivationCodec.WriteAsync(stream, activation, cancellationToken);
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(activation, JsonOptions);
-        if (payload.Length is 0 or > MaximumPayloadBytes)
-            throw new InvalidDataException("Activation frame exceeds maximum size.");
-
-        var prefix = new byte[4];
-        BinaryPrimitives.WriteInt32BigEndian(prefix, payload.Length);
-        await stream.WriteAsync(prefix, cancellationToken).ConfigureAwait(false);
-        await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-        await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    public static async ValueTask<ProductActivation> ReadFrameAsync(
+    public static ValueTask<ProductActivation> ReadFrameAsync(
         Stream stream,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(stream);
-        var prefix = new byte[4];
-        await ReadExactlyAsync(stream, prefix, cancellationToken).ConfigureAwait(false);
-        var length = BinaryPrimitives.ReadInt32BigEndian(prefix);
-        if (length is <= 0 or > MaximumPayloadBytes)
-            throw new InvalidDataException("Activation frame length is invalid.");
-
-        var payload = new byte[length];
-        await ReadExactlyAsync(stream, payload, cancellationToken).ConfigureAwait(false);
-        ProductActivation activation;
-        try
-        {
-            activation = JsonSerializer.Deserialize<ProductActivation>(payload, JsonOptions)
-                ?? throw new InvalidDataException("Activation payload is missing.");
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidDataException("Activation payload is malformed.", ex);
-        }
-        if (!Enum.IsDefined(activation.Kind))
-            throw new InvalidDataException("Activation kind is undefined.");
-        return activation;
-    }
-
-    private static async Task ReadExactlyAsync(
-        Stream stream,
-        Memory<byte> buffer,
-        CancellationToken cancellationToken)
-    {
-        var offset = 0;
-        while (offset < buffer.Length)
-        {
-            var read = await stream.ReadAsync(buffer[offset..], cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-                throw new InvalidDataException("Activation frame is truncated.");
-            offset += read;
-        }
-    }
+        => ProductActivationCodec.ReadAsync(stream, cancellationToken);
 }

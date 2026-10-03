@@ -14,11 +14,11 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        var initialActivation = ParseInitialActivation(args);
         using var instance = ProductInstanceGuard.Acquire(ProductId);
         if (!instance.IsPrimary)
         {
-            await instance.ForwardAsync(new ProductActivation(ProductActivationKind.Open))
-                .ConfigureAwait(false);
+            await instance.ForwardAsync(initialActivation).ConfigureAwait(false);
             return 0;
         }
 
@@ -60,7 +60,11 @@ public static class Program
             presentationTask = presentationSupervisor.RunAsync(productStop.Token);
 
             var activation = new ActivationChannel(instance.ActivationPipeName);
-            await RunActivationLoopAsync(activation, productStop, runtimeHost).ConfigureAwait(false);
+            await RunActivationLoopAsync(
+                activation,
+                productStop,
+                runtimeHost,
+                initialActivation).ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException) when (productStop.IsCancellationRequested)
@@ -90,8 +94,17 @@ public static class Program
     private static async Task RunActivationLoopAsync(
         ActivationChannel channel,
         CancellationTokenSource productStop,
-        ProductRuntimeHost runtimeHost)
+        ProductRuntimeHost runtimeHost,
+        ProductActivation initialActivation)
     {
+        if (!await ProcessActivationAsync(
+                initialActivation,
+                productStop,
+                runtimeHost).ConfigureAwait(false))
+        {
+            return;
+        }
+
         while (!productStop.IsCancellationRequested)
         {
             ProductActivation activation;
@@ -114,26 +127,84 @@ public static class Program
                 continue;
             }
 
-            switch (activation.Kind)
+            if (!await ProcessActivationAsync(
+                    activation,
+                    productStop,
+                    runtimeHost).ConfigureAwait(false))
             {
-                case ProductActivationKind.Exit:
-                    productStop.Cancel();
-                    return;
-                case ProductActivationKind.EnterSample:
-                    await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Sample)
-                        .ConfigureAwait(false);
-                    Trace.TraceInformation("Product runtime switched to isolated Sample mode.");
-                    break;
-                case ProductActivationKind.ReturnLive:
-                    await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Live)
-                        .ConfigureAwait(false);
-                    Trace.TraceInformation("Product runtime returned to Live mode.");
-                    break;
-                default:
-                    Trace.TraceInformation("Received product activation {0}.", activation.Kind);
-                    break;
+                return;
             }
         }
+    }
+
+    private static async Task<bool> ProcessActivationAsync(
+        ProductActivation activation,
+        CancellationTokenSource productStop,
+        ProductRuntimeHost runtimeHost)
+    {
+        switch (activation.Kind)
+        {
+            case ProductActivationKind.Exit:
+                productStop.Cancel();
+                return false;
+            case ProductActivationKind.EnterSample:
+                await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Sample)
+                    .ConfigureAwait(false);
+                break;
+            case ProductActivationKind.ReturnLive:
+                await runtimeHost.SwitchModeAsync(ProductRuntimeMode.Live)
+                    .ConfigureAwait(false);
+                break;
+            case ProductActivationKind.ConnectFrontier:
+                await runtimeHost.ConnectFrontierAsync(productStop.Token)
+                    .ConfigureAwait(false);
+                break;
+            case ProductActivationKind.DisconnectFrontier:
+                await runtimeHost.DisconnectFrontierAsync(productStop.Token)
+                    .ConfigureAwait(false);
+                break;
+            case ProductActivationKind.ProtocolCallback:
+                await runtimeHost.HandleProtocolCallbackAsync(
+                    activation.Payload!,
+                    productStop.Token).ConfigureAwait(false);
+                break;
+            case ProductActivationKind.SetManualComposition:
+                runtimeHost.SetManualComposition(activation.Payload!);
+                break;
+            case ProductActivationKind.SetSmartAuto:
+                runtimeHost.SetSmartAuto();
+                break;
+            case ProductActivationKind.SetEliteDataPath:
+                await runtimeHost.SetEliteDataPathAsync(activation.Payload!)
+                    .ConfigureAwait(false);
+                break;
+            case ProductActivationKind.Open:
+            case ProductActivationKind.Startup:
+                break;
+            default:
+                throw new InvalidDataException(
+                    $"Unsupported product activation: {activation.Kind}.");
+        }
+
+        Trace.TraceInformation("Processed product activation {0}.", activation.Kind);
+        return true;
+    }
+
+    internal static ProductActivation ParseInitialActivation(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ProductActivation activation = args switch
+        {
+            [] => new(ProductActivationKind.Open),
+            ["--startup"] => new(ProductActivationKind.Startup),
+            ["--protocol", var payload] => new(
+                ProductActivationKind.ProtocolCallback,
+                payload),
+            _ => throw new InvalidDataException(
+                "Unsupported WOLPERTINGER startup activation."),
+        };
+        ProductActivationValidator.Validate(activation);
+        return activation;
     }
 
     private static string RequirePackagedFile(string root, string fileName)

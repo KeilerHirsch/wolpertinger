@@ -8,7 +8,8 @@ public sealed record FrontierOAuthOptions(
     string ClientId,
     Uri RedirectUri,
     string Scope,
-    string Audience)
+    string Audience,
+    Uri? ApplicationCallbackUri = null)
 {
     public FrontierOAuthOptions Validate()
     {
@@ -20,6 +21,10 @@ public sealed record FrontierOAuthOptions(
         ArgumentNullException.ThrowIfNull(RedirectUri);
         ArgumentException.ThrowIfNullOrWhiteSpace(Scope);
         ArgumentException.ThrowIfNullOrWhiteSpace(Audience);
+        if (!RedirectUri.IsAbsoluteUri)
+            throw new InvalidOperationException("Frontier redirect URI must be absolute.");
+        if (ApplicationCallbackUri is { IsAbsoluteUri: false })
+            throw new InvalidOperationException("Application callback URI must be absolute.");
         return this;
     }
 }
