@@ -1,5 +1,7 @@
 # WOLPERTINGER
 
+[![CI](https://github.com/KeilerHirsch/wolpertinger/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/KeilerHirsch/wolpertinger/actions/workflows/ci.yml)
+
 **Your copilot should know what to do.**
 
 WOLPERTINGER is a local-first companion for **Elite Dangerous** that brings the right information forward for what you are doing now — without making an external AI provider the owner of your game state.
