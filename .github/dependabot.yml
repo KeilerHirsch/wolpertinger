@@ -1,0 +1,21 @@
+version: 2
+# Batch routine dependency updates; do not auto-merge unverified changes.
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      nuget-nonbreaking:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ["*"]
