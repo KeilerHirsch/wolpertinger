@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible WOLPERTINGER defect. Do not include private account data.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WOLPERTINGER is pre-alpha. Check [SECURITY.md](../../SECURITY.md) first for sensitive vulnerability reports.
+        Never post credentials, OAuth tokens, private profiles, or exploit details here.
+  - type: input
+    id: revision
+    attributes:
+      label: Affected revision
+      description: Commit hash, tag or precise build version
+      placeholder: "Commit SHA or tag"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal non-sensitive steps to reproduce the observed problem
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and observed result
+      description: Describe the difference; redact logs before sharing
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and relevant runtime/toolchain versions; no user identifiers
+    validations:
+      required: false
