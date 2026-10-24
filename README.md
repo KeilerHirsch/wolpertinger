@@ -1,46 +1,35 @@
+<div align="center">
+
 # WOLPERTINGER
 
-[![CI](https://github.com/KeilerHirsch/wolpertinger/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/KeilerHirsch/wolpertinger/actions/workflows/ci.yml)
+### Your copilot should know what to do.
 
-**Your copilot should know what to do.**
+**A local-first companion for Elite Dangerous — built around the commander's next decision.**
 
-WOLPERTINGER is a local-first companion for **Elite Dangerous** that brings the right information forward for what you are doing now — without making an external AI provider the owner of your game state.
+<img src="docs/assets/wolpertinger-concept-ui.webp" alt="WOLPERTINGER concept artwork depicting commander-facing navigation, exploration, engineering and cockpit information" width="100%">
 
-**Pre-alpha** · no supported end-user release yet.
+<sub>Concept artwork — not a screenshot of a completed interface.</sub>
 
-<p align="center">
-  <img src="docs/assets/wolpertinger-concept-ui.webp" alt="WOLPERTINGER concept UI showing route, exploration, engineering, and shipboard-assistant context in an Elite Dangerous cockpit" width="100%">
-</p>
+</div>
 
-<p align="center"><sub><strong>Concept UI.</strong> Product direction, not an implemented-feature screenshot.</sub></p>
+## The Mission
 
-## What it does
+**Less menu hunting. More flying.**
 
-- **Explore** without digging through panel after panel.
-- **Route** with context that follows the current task.
-- **Engineer** with the information that matters now.
-- **Stay local** for authoritative game context; optional providers add capability, not ownership.
+Exploration, navigation, materials, engineering and logistics are connected in the life of a commander, but the information needed for each decision is scattered.
 
-## Today
+WOLPERTINGER aims to bring relevant context together without surrendering authoritative game state to a cloud service or an optional AI provider.
 
-The trusted foundation is working. The commander-facing tray, overlay and hub experience is still in development.
+**One local foundation. Different missions. The commander stays in control.**
 
-One authoritative fact stream is designed to feed every surface, so the commander does not become the integration bus.
+## Where it stands
 
-## Under the hood
+**Pre-alpha.** The deterministic journal-processing and trusted-state foundation exists. The commander-facing tray, overlay and hub are still in development. There is **no supported end-user release** yet.
 
-- Deterministic local game-state processing.
-- A small isolated trusted core for critical boundaries.
-- Tests, replay and proof-backed gates for important claims.
+### Explore
 
-**High-assurance inside. KISS outside.**
+[**Project roadmap**](ROADMAP.md) · [**Project website**](https://keilerhirsch.github.io/wolpertinger/) · [**Technical demo releases**](https://github.com/KeilerHirsch/wolpertinger/releases)
 
-**Public docs:** [Roadmap](ROADMAP.md) · [Licence](LICENSE) · [Notices](NOTICE.md)
+---
 
-## Support
-
-Funding is voluntary and creates no feature, ranking, roadmap, review, release or technical-influence entitlement.
-
-## Licence
-
-WOLPERTINGER-owned code is licensed under the **European Union Public Licence 1.2 (EUPL-1.2)**. Third-party dependencies and assets retain their own licences and notices.
+<sub>Independent community project, not affiliated with Frontier Developments. [EUPL-1.2 licence](LICENSE) · [Third-party notices](NOTICE.md) · [Security](SECURITY.md)</sub>
